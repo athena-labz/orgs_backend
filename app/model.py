@@ -67,3 +67,15 @@ class Organization(models.Model):
 
 
 OrganizationSpec = pydantic_model_creator(Organization, name="Organization")
+
+
+class OrganizationMembership(models.Model):
+    id = fields.IntField(pk=True)
+
+    user: fields.OneToOneRelation[User] = fields.OneToOneField(
+        "models.User", related_name="organization_membership"
+    )
+
+    join_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+# OrganizationMembership - user - organization many to many

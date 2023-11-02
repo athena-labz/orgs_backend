@@ -81,6 +81,7 @@ async def confirm_email(
         raise HTTPException(status_code=400, detail="Email already verified")
 
     if email_validation_string != current_user.email_validation_string:
+        print(email_validation_string, current_user.email_validation_string)
         await current_user.update_from_dict(
             {"email_validation_string": utils.string_generator()}
         )
@@ -118,6 +119,45 @@ async def organization_create(
         areas=body.areas,
         admin=current_user,
     )
+    pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
+
+    return pydantic_organization
+
+
+@app.get(
+    "/organization/{organization_identifier}", response_model=specs.OrganizationSpec
+)
+async def organization_view(organization_identifier: str):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
+
+    return pydantic_organization
+
+
+@app.post(
+    "/organization/{organization_identifier}/edit",
+    response_model=specs.OrganizationSpec,
+)
+async def organization_edit(
+    current_user: Annotated[User, Depends(dependecy.get_current_active_user)],
+    body: specs.EditOrganizationBodySpec,
+    organization_identifier: str,
+):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    update_dict = {}
+    for key, value in body.model_dump().items():
+        if value is not None:
+            update_dict[key] = value
+
+    await organization.update_from_dict(update_dict)
+    await organization.save()
+
     pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
 
     return pydantic_organization
