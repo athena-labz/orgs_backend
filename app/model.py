@@ -1,21 +1,23 @@
-import peewee as pw
+from tortoise import fields, models
+from tortoise.contrib.pydantic import pydantic_model_creator
+
 import datetime
 
 
-db = pw.SqliteDatabase('test.db')
+class User(models.Model):
+    id = fields.IntField(pk=True)
 
-
-class User(pw.Model):
-    id = pw.IntegerField(primary_key=True)
-
-    email = pw.CharField(128)
-    stake_address = pw.CharField(128)
-    token = pw.CharField(256, null=True)
+    email = fields.CharField(max_length=128, unique=True)
+    stake_address = fields.CharField(max_length=128, unique=True)
+    token = fields.CharField(max_length=256, null=True)
 
     # If the current user is active / verified
-    active = pw.BooleanField(default=False)
+    active = fields.BooleanField(default=False)
 
-    register_date = pw.DateField(default=datetime.datetime.utcnow)
+    register_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
-    class Meta:
-        database = db
+    class PydanticMeta:
+        exclude = ["id", "token"]
+
+UserSpec = pydantic_model_creator(User, name="User")
+UserInSpec = pydantic_model_creator(User, name="UserIn", exclude_readonly=True)

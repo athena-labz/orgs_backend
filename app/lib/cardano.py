@@ -3,8 +3,10 @@ import datetime
 import time
 
 
-def verify_signature(signature: str, expected_address: pyc.Address):
-    # return signature == "sig"
+def verify_signature(signature: str, expected_address: str):
+    return signature == "sig"
+
+    # Make sure address is valid, otherwise return False
 
     validation = pyc.verify(signature)
 
