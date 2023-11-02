@@ -40,13 +40,11 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     if user is None:
         raise credentials_exception
 
-    pydantic_user = await specs.UserSpec.from_tortoise_orm(user)
-
-    return pydantic_user
+    return user
 
 
 async def get_current_active_user(
-    current_user: Annotated[specs.UserSpec, Depends(get_current_user)]
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
     if not current_user.active:
         raise HTTPException(status_code=400, detail="Inactive user")

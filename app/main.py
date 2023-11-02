@@ -4,9 +4,10 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from tortoise.contrib.fastapi import register_tortoise
+from tortoise.expressions import Q
 
-from model import User
-from lib import cardano, auth, environment
+from model import User, UserType, Organization, OrganizationType
+from lib import cardano, auth, environment, utils
 
 import dependecy
 import specs
@@ -48,32 +49,78 @@ async def login_for_access_token(
 async def read_users_me(
     current_user: Annotated[specs.UserSpec, Depends(dependecy.get_current_active_user)]
 ):
-    return current_user
+    pydantic_user = await specs.UserSpec.from_tortoise_orm(current_user)
+    return pydantic_user
 
 
-@app.post("/register")
+@app.post("/users/register", response_model=specs.UserSpec)
 async def register(body: specs.RegisterBodySpec):
     if not cardano.verify_signature(body.signature, body.stake_address):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-    user = await User.create(email=body.email, stake_address=body.stake_address)
+    user = await User.filter(
+        Q(stake_address=body.stake_address) | Q(email=body.email)
+    ).first()
+    if user is not None:
+        raise HTTPException(status_code=400, detail="Stake address or email taken")
+
+    user = await User.create(
+        type=body.user_type.value, email=body.email, stake_address=body.stake_address
+    )
     pydantic_user = await specs.UserSpec.from_tortoise_orm(user)
 
     return pydantic_user
 
 
-# class CreateOrganizationBody(BaseModel):
-#     email: str
-#     password: str
-#     signature: str
-#     user_type: UserType
+@app.post("/users/confirm/email")
+async def confirm_email(
+    email_validation_string: str,
+    current_user: Annotated[User, Depends(dependecy.get_current_user)],
+):
+    if current_user.active:
+        raise HTTPException(status_code=400, detail="Email already verified")
+
+    if email_validation_string != current_user.email_validation_string:
+        await current_user.update_from_dict(
+            {"email_validation_string": utils.string_generator()}
+        )
+        await current_user.save()
+
+        raise HTTPException(status_code=400, detail="Wrong email string")
+
+    await current_user.update_from_dict({"active": True})
+    await current_user.save()
+
+    return {"message": "Successfully confirmed the email"}
 
 
-# @app.post("/organization/create")
-# def create_organization(body: CreateOrganizationBody):
-#     print("body", body)
+@app.post("/organization/create", response_model=specs.OrganizationSpec)
+async def organization_create(
+    current_user: Annotated[User, Depends(dependecy.get_current_active_user)],
+    body: specs.CreateOrganizationBodySpec,
+):
+    if not current_user.type == UserType.ORGANIZER.value:
+        raise HTTPException(status_code=400, detail="User not of type organizer")
 
-#     return {"Hello": "World"}
+    existing_organization = await Organization.filter(
+        identifier=body.identifier
+    ).first()
+    if existing_organization is not None:
+        raise HTTPException(status_code=400, detail="Organization identifier taken")
+
+    organization = await Organization.create(
+        identifier=body.identifier,
+        type=body.organization_type.value,
+        name=body.name,
+        description=body.description,
+        students_password=body.students_password,
+        teachers_password=body.teachers_password,
+        areas=body.areas,
+        admin=current_user,
+    )
+    pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
+
+    return pydantic_organization
 
 
 register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})
