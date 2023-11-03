@@ -19,8 +19,8 @@ class User(models.Model):
     id = fields.IntField(pk=True)
 
     type = fields.CharField(max_length=16)
-    email = fields.CharField(max_length=128, unique=True)
-    stake_address = fields.CharField(max_length=128, unique=True)
+    email = fields.CharField(max_length=128, unique=True, index=True)
+    stake_address = fields.CharField(max_length=128, unique=True, index=True)
     token = fields.CharField(max_length=256, null=True)
 
     # If the current user is active / verified
@@ -72,10 +72,56 @@ OrganizationSpec = pydantic_model_creator(Organization, name="Organization")
 class OrganizationMembership(models.Model):
     id = fields.IntField(pk=True)
 
-    user: fields.OneToOneRelation[User] = fields.OneToOneField(
-        "models.User", related_name="organization_membership"
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        model_name="models.User", related_name="membership_organizations"
+    )
+    organization: fields.ForeignKeyRelation[Organization] = fields.ForeignKeyField(
+        model_name="models.Organization", related_name="membership_users"
     )
 
-    join_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+    membership_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
-# OrganizationMembership - user - organization many to many
+
+class Group(models.Model):
+    id = fields.IntField(pk=True)
+
+    leader_membership: fields.ForeignKeyRelation[
+        OrganizationMembership
+    ] = fields.ForeignKeyField(
+        model_name="models.OrganizationMembership", related_name="created_groups"
+    )
+    # membership_users: fields.ReverseRelation["GroupMembership"]
+
+    leader_reward_tokens = fields.BigIntField()
+
+    name = fields.CharField(max_length=128, unique=True)
+    approved = fields.BooleanField(default=False)
+    total_reward_tokens: fields.BigIntField()
+
+    creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+    class PydanticMeta:
+        exclude = ["id"]
+
+
+GroupSpec = pydantic_model_creator(Group, name="Group")
+
+
+class GroupMembership(models.Model):
+    id = fields.IntField(pk=True)
+
+    group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
+        model_name="models.Group", related_name="memberhip_users"
+    )
+    user_membership: fields.ForeignKeyRelation[
+        OrganizationMembership
+    ] = fields.ForeignKeyField(
+        model_name="models.OrganizationMembership", related_name="membership_groups"
+    )
+
+    reward_tokens: fields.BigIntField()
+
+    accepeted = fields.BooleanField(default=False)
+    rejected = fields.BooleanField(default=False)
+
+    invite_date = fields.DatetimeField(default=datetime.datetime.utcnow)

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Annotated, Optional
-from model import UserSpec, OrganizationType, OrganizationSpec, UserType
+from model import UserSpec, OrganizationType, OrganizationSpec, UserType, GroupSpec
 
 
 # Token
@@ -37,3 +37,15 @@ class EditOrganizationBodySpec(BaseModel):
     students_password: Optional[Annotated[str, Field(max_length=32)]] = None
     teachers_password: Optional[Annotated[str, Field(max_length=32)]] = None
     areas: Optional[Annotated[list[str], Field(max_length=10)]] = None
+
+
+class JoinOrganizationBodySpec(BaseModel):
+    password: str
+
+
+class CreateGroupBodySpec(BaseModel):
+    name: Annotated[str, Field(max_length=128)]
+    leader_reward: int
+    members: Annotated[
+        dict[str, int], Field(max_length=4, min_length=1)
+    ]  # map of stake address and reward

@@ -6,8 +6,16 @@ from fastapi.security import OAuth2PasswordRequestForm
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.expressions import Q
 
-from model import User, UserType, Organization, OrganizationType
-from lib import cardano, auth, environment, utils
+from model import (
+    User,
+    UserType,
+    Organization,
+    OrganizationMembership,
+    OrganizationType,
+    Group,
+    GroupMembership,
+)
+from lib import cardano, auth, environment, utils, group
 
 import dependecy
 import specs
@@ -149,7 +157,12 @@ async def organization_edit(
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
-    
+
+    if organization.admin != current_user:
+        raise HTTPException(
+            status_code=400, detail="User does not have permission to edit organization"
+        )
+
     update_dict = {}
     for key, value in body.model_dump().items():
         if value is not None:
@@ -161,6 +174,89 @@ async def organization_edit(
     pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
 
     return pydantic_organization
+
+
+@app.post("/organization/{organization_identifier}/join")
+async def organization_join(
+    current_user: Annotated[User, Depends(dependecy.get_current_active_user)],
+    body: specs.JoinOrganizationBodySpec,
+    organization_identifier: str,
+):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    if current_user.type == UserType.STUDENT.value:
+        if body.password != organization.students_password:
+            raise HTTPException(status_code=400, detail="Wrong student password")
+    elif current_user.type == UserType.TEACHER.value:
+        if body.password != organization.teachers_password:
+            raise HTTPException(status_code=400, detail="Wrong teacher password")
+    else:
+        raise HTTPException(
+            status_code=400, detail="Organizer cannot join any organizations"
+        )
+
+    await OrganizationMembership.create(user=current_user, organization=organization)
+
+    return {"message": f"Successfully joined {organization_identifier}"}
+
+
+@app.post(
+    "/organization/{organization_identifier}/group/create",
+    response_model=specs.GroupSpec,
+)
+async def group_create(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    body: specs.CreateGroupBodySpec,
+):
+    user = current_membership.user
+    organization = current_membership.organization
+
+    if not user.type == UserType.STUDENT.value:
+        raise HTTPException(status_code=400, detail="User not of type student")
+
+    if await group.is_member_of_group(user, current_membership):
+        raise HTTPException(
+            status_code=400, detail="Student is already member of a group"
+        )
+
+    members = []  # This is so we don't change the database until everything is okay
+    for member_email, reward in body.members.items():
+        member_user = await User.filter(email=member_email).first()
+        if member_user is None:
+            raise HTTPException(
+                status_code=400, detail="Group participant account not found"
+            )
+
+        membership = await OrganizationMembership.filter(
+            Q(user=member_user) & Q(organization=organization)
+        ).first()
+        if membership is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Group participant is not a member of this organization",
+            )
+
+        members.append(membership)
+
+    created_group = await Group.create(
+        leader_membership=current_membership,
+        leader_reward_tokens=body.leader_reward,
+        name=body.name,
+        total_reward_tokens=body.leader_reward + sum(body.members.values()),
+    )
+
+    for membership in members:
+        await GroupMembership.create(
+            group=created_group, user_membership=membership, reward_tokens=reward
+        )
+
+    pydantic_group = await specs.GroupSpec.from_tortoise_orm(created_group)
+
+    return pydantic_group
 
 
 register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})

@@ -1,0 +1,8 @@
+{
+    "register_student": {
+        "user_type": "student",
+        "email": "student@email.com",
+        "stake_address": "stake_test456",
+        "signature": "sig"
+    }
+}

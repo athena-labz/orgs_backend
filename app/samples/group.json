@@ -1,0 +1,9 @@
+{
+    "create": {
+        "name": "Group 1",
+        "leader_reward": 10000,
+        "members": {
+            "student2@email.com": 5000
+        }
+    }
+}

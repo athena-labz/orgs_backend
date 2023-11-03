@@ -3,10 +3,13 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
+from tortoise.query_utils import Prefetch
+from tortoise.expressions import Q
+
 from jose import jwt, JWTError
 
 from lib import environment
-from model import User
+from model import User, Organization, OrganizationMembership
 import specs
 
 
@@ -50,3 +53,22 @@ async def get_current_active_user(
         raise HTTPException(status_code=400, detail="Inactive user")
 
     return current_user
+
+
+async def get_current_user_membership(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    organization_identifier: str,
+):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=400, detail="Organization does not exist")
+
+    organization_membership = await OrganizationMembership.filter(
+        Q(user=current_user) & Q(organization=organization)
+    ).prefetch_related("user", "organization").first()
+    if organization_membership is None:
+        raise HTTPException(
+            status_code=400, detail="User is not member of this organization"
+        )
+
+    return organization_membership
