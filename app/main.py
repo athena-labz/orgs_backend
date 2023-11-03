@@ -216,19 +216,24 @@ async def group_create(
     organization = current_membership.organization
 
     if not user.type == UserType.STUDENT.value:
+        # Only students can create groups
         raise HTTPException(status_code=400, detail="User not of type student")
+
+    if organization.type != OrganizationType.GROUPS.value:
+        # Only organization of type groups can have manually created groups
+        raise HTTPException(status_code=400, detail="Organization not of type groups")
 
     if await group.is_member_of_group(current_membership):
         raise HTTPException(
             status_code=400, detail="Student is already member of a group"
         )
-    
-    # If there is a group with the same name, return erro
-    existing_group = await Group.filter(identifier=body.identifier).first()
+
+    # If there is a group with the same identifier, return error
+    existing_group = await Group.filter(
+        Q(identifier=body.identifier) & Q(organization=organization)
+    ).first()
     if existing_group is not None:
-        raise HTTPException(
-            status_code=400, detail="Group identifier taken"
-        )
+        raise HTTPException(status_code=400, detail="Group identifier taken")
 
     members = []  # This is so we don't change the database until everything is okay
     for member_email, reward in body.members.items():
@@ -240,28 +245,36 @@ async def group_create(
 
         membership = await OrganizationMembership.filter(
             Q(user=member_user) & Q(organization=organization)
-        ).first()
+        ).prefetch_related("user", "organization").first()
         if membership is None:
             raise HTTPException(
                 status_code=400,
                 detail="Group participant is not a member of this organization",
             )
 
-        members.append(membership)
+        if await group.is_member_of_group(membership):
+            raise HTTPException(
+                status_code=400,
+                detail="Group participant is already member of a group",
+            )
 
-    created_group = await Group.create(identifier=body.identifier, name=body.name)
+        members.append((member_user, reward))
+
+    created_group = await Group.create(
+        identifier=body.identifier, name=body.name, organization=organization
+    )
 
     await GroupMembership.create(
         group=created_group,
-        user_membership=current_membership,
+        user=user,
         reward_tokens=body.leader_reward,
         accepted=True,
         leader=True,
     )
 
-    for membership in members:
+    for member_user, reward in members:
         await GroupMembership.create(
-            group=created_group, user_membership=membership, reward_tokens=reward
+            group=created_group, user=member_user, reward_tokens=reward
         )
 
     pydantic_group = await specs.GroupSpec.from_tortoise_orm(created_group)

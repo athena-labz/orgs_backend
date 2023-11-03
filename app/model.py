@@ -84,8 +84,16 @@ class OrganizationMembership(models.Model):
 
 class Group(models.Model):
     id = fields.IntField(pk=True)
-    identifier = fields.CharField(max_length=64, unique=True, index=True)
 
+    # Is unique to the organization
+    identifier = fields.CharField(max_length=64, index=True)
+    organization: fields.ForeignKeyRelation["Organization"] = fields.ForeignKeyField(
+        model_name="models.Organization", related_name="created_groups", index=True
+    )
+
+    # Tasks from orgs of type GROUP will always create a new group
+    # for each task based on the selected members
+    source = fields.CharField(max_length=32, default="user_created")
     name = fields.CharField(max_length=128, unique=True)
     approved = fields.BooleanField(default=False)
 
@@ -104,10 +112,8 @@ class GroupMembership(models.Model):
     group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
         model_name="models.Group", related_name="memberhip_users"
     )
-    user_membership: fields.ForeignKeyRelation[
-        OrganizationMembership
-    ] = fields.ForeignKeyField(
-        model_name="models.OrganizationMembership", related_name="membership_groups"
+    user: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
+        model_name="models.User", related_name="membership_groups"
     )
 
     leader = fields.BooleanField(default=False)
@@ -117,3 +123,9 @@ class GroupMembership(models.Model):
     rejected = fields.BooleanField(default=False)
 
     invite_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+
+# class Task(models.Model):
+#     # Student or group of stundents which are part of it
+
+#     pass

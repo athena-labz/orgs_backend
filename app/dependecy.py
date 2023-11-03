@@ -84,13 +84,15 @@ async def get_current_group_membership(
     ],
     group_identifier: str,
 ):
-    group = await Group.filter(name=group_identifier).first()
+    group = await Group.filter(
+        Q(identifier=group_identifier) & Q(organization=current_membership.organization)
+    ).first()
     if group is None:
         raise HTTPException(status_code=400, detail="Group does not exist")
 
     group_membership = (
         await GroupMembership.filter(
-            Q(user_membership=current_membership) & Q(group=group)
+            Q(user=current_membership.user) & Q(group=group)
         )
         .prefetch_related("group")
         .first()
