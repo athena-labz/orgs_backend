@@ -1,5 +1,6 @@
 {
     "create": {
+        "identifier": "group_1",
         "name": "Group 1",
         "leader_reward": 10000,
         "members": {

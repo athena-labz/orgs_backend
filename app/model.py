@@ -84,19 +84,10 @@ class OrganizationMembership(models.Model):
 
 class Group(models.Model):
     id = fields.IntField(pk=True)
-
-    leader_membership: fields.ForeignKeyRelation[
-        OrganizationMembership
-    ] = fields.ForeignKeyField(
-        model_name="models.OrganizationMembership", related_name="created_groups"
-    )
-    # membership_users: fields.ReverseRelation["GroupMembership"]
-
-    leader_reward_tokens = fields.BigIntField()
+    identifier = fields.CharField(max_length=64, unique=True, index=True)
 
     name = fields.CharField(max_length=128, unique=True)
     approved = fields.BooleanField(default=False)
-    total_reward_tokens: fields.BigIntField()
 
     creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
@@ -119,9 +110,10 @@ class GroupMembership(models.Model):
         model_name="models.OrganizationMembership", related_name="membership_groups"
     )
 
+    leader = fields.BooleanField(default=False)
     reward_tokens: fields.BigIntField()
 
-    accepeted = fields.BooleanField(default=False)
+    accepted = fields.BooleanField(default=False)
     rejected = fields.BooleanField(default=False)
 
     invite_date = fields.DatetimeField(default=datetime.datetime.utcnow)

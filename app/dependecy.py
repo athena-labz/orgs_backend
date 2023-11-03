@@ -9,7 +9,7 @@ from tortoise.expressions import Q
 from jose import jwt, JWTError
 
 from lib import environment
-from model import User, Organization, OrganizationMembership
+from model import User, Organization, OrganizationMembership, Group, GroupMembership
 import specs
 
 
@@ -63,12 +63,52 @@ async def get_current_user_membership(
     if organization is None:
         raise HTTPException(status_code=400, detail="Organization does not exist")
 
-    organization_membership = await OrganizationMembership.filter(
-        Q(user=current_user) & Q(organization=organization)
-    ).prefetch_related("user", "organization").first()
+    organization_membership = (
+        await OrganizationMembership.filter(
+            Q(user=current_user) & Q(organization=organization)
+        )
+        .prefetch_related("user", "organization")
+        .first()
+    )
     if organization_membership is None:
         raise HTTPException(
             status_code=400, detail="User is not member of this organization"
         )
 
     return organization_membership
+
+
+async def get_current_group_membership(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(get_current_user_membership)
+    ],
+    group_identifier: str,
+):
+    group = await Group.filter(name=group_identifier).first()
+    if group is None:
+        raise HTTPException(status_code=400, detail="Group does not exist")
+
+    group_membership = (
+        await GroupMembership.filter(
+            Q(user_membership=current_membership) & Q(group=group)
+        )
+        .prefetch_related("group")
+        .first()
+    )
+    if group_membership is None:
+        raise HTTPException(
+            status_code=400, detail="User has no membership with this group"
+        )
+
+    return group_membership
+
+
+async def get_current_active_group_membership(
+    group_membership: Annotated[GroupMembership, Depends(get_current_group_membership)]
+):
+    if group_membership.accepted is not True:
+        raise HTTPException(
+            status_code=400, detail="User has not accepted this group yet"
+        )
+
+    return group_membership

@@ -44,6 +44,7 @@ class JoinOrganizationBodySpec(BaseModel):
 
 
 class CreateGroupBodySpec(BaseModel):
+    identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
     name: Annotated[str, Field(max_length=128)]
     leader_reward: int
     members: Annotated[

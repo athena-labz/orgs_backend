@@ -218,9 +218,16 @@ async def group_create(
     if not user.type == UserType.STUDENT.value:
         raise HTTPException(status_code=400, detail="User not of type student")
 
-    if await group.is_member_of_group(user, current_membership):
+    if await group.is_member_of_group(current_membership):
         raise HTTPException(
             status_code=400, detail="Student is already member of a group"
+        )
+    
+    # If there is a group with the same name, return erro
+    existing_group = await Group.filter(identifier=body.identifier).first()
+    if existing_group is not None:
+        raise HTTPException(
+            status_code=400, detail="Group identifier taken"
         )
 
     members = []  # This is so we don't change the database until everything is okay
@@ -242,11 +249,14 @@ async def group_create(
 
         members.append(membership)
 
-    created_group = await Group.create(
-        leader_membership=current_membership,
-        leader_reward_tokens=body.leader_reward,
-        name=body.name,
-        total_reward_tokens=body.leader_reward + sum(body.members.values()),
+    created_group = await Group.create(identifier=body.identifier, name=body.name)
+
+    await GroupMembership.create(
+        group=created_group,
+        user_membership=current_membership,
+        reward_tokens=body.leader_reward,
+        accepted=True,
+        leader=True,
     )
 
     for membership in members:
@@ -257,6 +267,54 @@ async def group_create(
     pydantic_group = await specs.GroupSpec.from_tortoise_orm(created_group)
 
     return pydantic_group
+
+
+@app.post("/organization/{organization_identifier}/group/{group_identifier}/accept")
+async def group_accept(
+    group_membership: Annotated[
+        GroupMembership, Depends(dependecy.get_current_group_membership)
+    ]
+):
+    if group_membership.accepted is True:
+        raise HTTPException(status_code=400, detail="User is already member of group")
+
+    if group_membership.rejected is True:
+        raise HTTPException(status_code=400, detail="User has already rejected invite")
+
+    await group_membership.update_from_dict({"accepted": True})
+    await group_membership.save()
+
+    return {"message": "Successfully accepted group invite"}
+
+
+@app.post("/organization/{organization_identifier}/group/{group_identifier}/reject")
+async def group_reject(
+    group_membership: Annotated[
+        GroupMembership, Depends(dependecy.get_current_group_membership)
+    ]
+):
+    if group_membership.accepted is True:
+        raise HTTPException(status_code=400, detail="User is already member of group")
+
+    if group_membership.rejected is True:
+        raise HTTPException(status_code=400, detail="User has already rejected invite")
+
+    await group_membership.update_from_dict({"rejected": True})
+    await group_membership.save()
+
+    return {"message": "Successfully rejected group invite"}
+
+
+@app.post("/organization/{organization_identifier}/group/{group_identifier}/leave")
+async def group_leave(
+    group_membership: Annotated[
+        GroupMembership, Depends(dependecy.get_current_active_group_membership)
+    ]
+):
+    await group_membership.update_from_dict({"accepted": False, "rejected": True})
+    await group_membership.save()
+
+    return {"message": "Successfully left group"}
 
 
 register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})
