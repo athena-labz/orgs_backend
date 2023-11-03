@@ -1,6 +1,15 @@
 from pydantic import BaseModel, Field
 from typing import Annotated, Optional
-from model import UserSpec, OrganizationType, OrganizationSpec, UserType, GroupSpec
+from model import (
+    UserSpec,
+    OrganizationType,
+    OrganizationSpec,
+    UserType,
+    GroupSpec,
+    TaskSpec,
+)
+
+import datetime
 
 
 # Token
@@ -50,3 +59,24 @@ class CreateGroupBodySpec(BaseModel):
     members: Annotated[
         dict[str, int], Field(max_length=4, min_length=1)
     ]  # map of stake address and reward
+
+
+class CreateTaskBodySpec(BaseModel):
+    identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
+    name: Annotated[str, Field(max_length=128)]
+    description: Annotated[str, Field(max_length=1024)]
+    deadline: datetime.datetime
+
+
+class SubmitTaskBodySpec(BaseModel):
+    name: Annotated[str, Field(max_length=128)]
+    description: Annotated[str, Field(max_length=1024)]
+
+
+class RejectTaskBodySpec(BaseModel):
+    description: Annotated[str, Field(max_length=1024)]
+
+
+class ReviewTaskBodySpec(BaseModel):
+    description: Annotated[str, Field(max_length=1024)]
+    extended_deadline: Optional[datetime.datetime] = None

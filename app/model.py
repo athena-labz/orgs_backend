@@ -94,12 +94,12 @@ class Group(models.Model):
     # Tasks from orgs of type GROUP will always create a new group
     # for each task based on the selected members
     source = fields.CharField(max_length=32, default="user_created")
-    name = fields.CharField(max_length=128, unique=True)
+    name = fields.CharField(max_length=128)
 
     creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
     class PydanticMeta:
-        exclude = ["id"]
+        exclude = ["id", "source"]
 
 
 GroupSpec = pydantic_model_creator(Group, name="Group")
@@ -127,8 +127,12 @@ class GroupMembership(models.Model):
 class Task(models.Model):
     id = fields.IntField(pk=True)
 
-    name = fields.CharField(max_length=128, unique=True)
-    description = fields.CharField(max_length=1024, unique=True)
+    identifier = fields.CharField(
+        max_length=64, index=True
+    )  # Unique in the organization
+
+    name = fields.CharField(max_length=128)
+    description = fields.CharField(max_length=1024)
     deadline = fields.DatetimeField()
 
     group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
@@ -141,13 +145,22 @@ class Task(models.Model):
     is_approved_completed = fields.BooleanField(default=False)  # By teacher
     is_rejected_completed = fields.BooleanField(default=False)
 
+    is_rewards_claimed = fields.BooleanField(default=False)
+
     creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+    class PydanticMeta:
+        exclude = ["id"]
+
+
+TaskSpec = pydantic_model_creator(Task, name="Task")
 
 
 class TaskAction(models.Model):
-    name = fields.CharField(max_length=128, unique=True)
-    description = fields.CharField(max_length=1024, unique=True)
-    deadline = fields.DatetimeField()
+    id = fields.IntField(pk=True)
+
+    name = fields.CharField(max_length=128)
+    description = fields.CharField(max_length=1024)
 
     author: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
         model_name="models.User", related_name="actions"

@@ -14,6 +14,8 @@ from model import (
     OrganizationType,
     Group,
     GroupMembership,
+    Task,
+    TaskAction,
 )
 from lib import cardano, auth, environment, utils, group
 
@@ -243,9 +245,13 @@ async def group_create(
                 status_code=400, detail="Group participant account not found"
             )
 
-        membership = await OrganizationMembership.filter(
-            Q(user=member_user) & Q(organization=organization)
-        ).prefetch_related("user", "organization").first()
+        membership = (
+            await OrganizationMembership.filter(
+                Q(user=member_user) & Q(organization=organization)
+            )
+            .prefetch_related("user", "organization")
+            .first()
+        )
         if membership is None:
             raise HTTPException(
                 status_code=400,
@@ -330,16 +336,261 @@ async def group_leave(
     return {"message": "Successfully left group"}
 
 
-@app.post("/organization/{organization_identifier}/task/create")
-async def group_leave(
+@app.post(
+    "/organization/{organization_identifier}/group/task/create",
+    response_model=specs.TaskSpec,
+)
+async def group_task_create(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
     group_membership: Annotated[
         GroupMembership, Depends(dependecy.get_current_active_group_membership)
-    ]
+    ],
+    body: specs.CreateTaskBodySpec,
 ):
-    await group_membership.update_from_dict({"accepted": False, "rejected": True})
-    await group_membership.save()
+    # Make sure there is no other task with this identifier in this
+    # organization
+    existing_task = await Task.filter(
+        Q(identifier=body.identifier)
+        & Q(group__organization=current_membership.organization)
+    ).first()
+    if existing_task is not None:
+        raise HTTPException(status_code=400, detail="Task identifier taken")
 
-    return {"message": "Successfully left group"}
+    task = await Task.create(
+        identifier=body.identifier,
+        name=body.name,
+        description=body.description,
+        deadline=body.deadline,
+        group=group_membership.group,
+    )
+
+    pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
+
+    return pydantic_task
+
+
+@app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}",
+    response_model=specs.TaskSpec,
+)
+async def get_task(task: Annotated[Task, Depends(dependecy.get_task)]):
+    pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
+
+    return pydantic_task
+
+
+@app.post(
+    "/organization/{organization_identifier}/task/{task_identifier}/start/approve"
+)
+async def task_start_approve(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+):
+    if current_membership.user.type != UserType.TEACHER.value:
+        raise HTTPException(
+            status_code=400, detail="Only teacher can approve task start"
+        )
+
+    if task.is_approved_start or task.is_rejected_start:
+        raise HTTPException(status_code=400, detail="Task has already started")
+
+    task.update_from_dict({"is_approved_start": True, "is_rejected_start": False})
+    task_action = TaskAction(
+        name="Approve task start",
+        description="",
+        author=current_membership.user,
+        task=task,
+    )
+
+    await task.save()
+    await task_action.save()
+
+    return {"message": "Successfully aproved start of task"}
+
+
+@app.post("/organization/{organization_identifier}/task/{task_identifier}/start/reject")
+async def task_start_reject(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+):
+    if current_membership.user.type != UserType.TEACHER.value:
+        raise HTTPException(
+            status_code=400, detail="Only teacher can approve task start"
+        )
+    
+    if task.is_approved_start or task.is_rejected_start:
+        raise HTTPException(status_code=400, detail="Task has already started")
+
+    task.update_from_dict({"is_approved_start": False, "is_rejected_start": True})
+    task_action = TaskAction(
+        name="Reject task start",
+        description="",
+        author=current_membership.user,
+        task=task,
+    )
+
+    await task.save()
+    await task_action.save()
+
+    return {"message": "Successfully rejected start of task"}
+
+
+@app.post("/organization/{organization_identifier}/task/{task_identifier}/submission")
+async def task_submission(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+    body: specs.SubmitTaskBodySpec,
+):
+    # Make sure user is part of task
+    if not await group.is_member_of_specific_group(current_membership, task.group):
+        raise HTTPException(status_code=400, detail="User is not part of this task")
+
+    if not task.is_approved_start:
+        raise HTTPException(
+            status_code=400, detail="Task has not been approved by a teacher yet"
+        )
+
+    if task.is_rejected_completed or task.is_approved_completed:
+        raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    task_action = TaskAction(
+        name=body.name,
+        description=body.description,
+        author=current_membership.user,
+        task=task,
+        is_submission=True,
+    )
+
+    await task_action.save()
+
+    return {"message": "Successfully submitted task for review"}
+
+
+@app.post(
+    "/organization/{organization_identifier}/task/{task_identifier}/submission/approve"
+)
+async def task_submission_approve(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+):
+    if current_membership.user.type != UserType.TEACHER.value:
+        raise HTTPException(
+            status_code=400, detail="Only teacher can approve task submission"
+        )
+
+    if not task.is_approved_start:
+        raise HTTPException(
+            status_code=400, detail="Task has not been approved by a teacher yet"
+        )
+
+    if task.is_rejected_completed or task.is_approved_completed:
+        raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    task.update_from_dict(
+        {"is_approved_completed": True, "is_rejected_completed": False}
+    )
+    task_action = TaskAction(
+        name="Approve task submission",
+        description="",
+        author=current_membership.user,
+        task=task,
+        is_review=True,
+    )
+
+    await task.save()
+    await task_action.save()
+
+    return {"message": "Successfully approved task submission"}
+
+
+@app.post(
+    "/organization/{organization_identifier}/task/{task_identifier}/submission/reject"
+)
+async def task_submission_reject(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+    body: specs.RejectTaskBodySpec,
+):
+    if current_membership.user.type != UserType.TEACHER.value:
+        raise HTTPException(
+            status_code=400, detail="Only teacher can reject task submission"
+        )
+
+    if not task.is_approved_start:
+        raise HTTPException(
+            status_code=400, detail="Task has not been approved by a teacher yet"
+        )
+
+    if task.is_rejected_completed or task.is_approved_completed:
+        raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    task.update_from_dict(
+        {"is_approved_completed": False, "is_rejected_completed": True}
+    )
+    task_action = TaskAction(
+        name="Reject task submission",
+        description=body.description,
+        author=current_membership.user,
+        task=task,
+        is_review=True,
+    )
+
+    await task.save()
+    await task_action.save()
+
+    return {"message": "Successfully rejected task submission"}
+
+
+@app.post(
+    "/organization/{organization_identifier}/task/{task_identifier}/submission/review"
+)
+async def task_submission_review(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_task)],
+    body: specs.ReviewTaskBodySpec,
+):
+    if current_membership.user.type != UserType.TEACHER.value:
+        raise HTTPException(
+            status_code=400, detail="Only teacher can reject task submission"
+        )
+
+    if not task.is_approved_start:
+        raise HTTPException(
+            status_code=400, detail="Task has not been approved by a teacher yet"
+        )
+
+    if task.is_rejected_completed or task.is_approved_completed:
+        raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    if body.extended_deadline is not None:
+        task.update_from_dict({"deadline": body.extended_deadline})
+        await task.save()
+
+    task_action = TaskAction(
+        name="Asked to review and resubmit task",
+        description=body.description,
+        author=current_membership.user,
+        task=task,
+        is_review=True,
+    )
+
+    await task_action.save()
+
+    return {"message": "Successfully asked for a task resubmission"}
 
 
 register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})

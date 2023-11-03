@@ -9,7 +9,14 @@ from tortoise.expressions import Q
 from jose import jwt, JWTError
 
 from lib import environment
-from model import User, Organization, OrganizationMembership, Group, GroupMembership
+from model import (
+    User,
+    Organization,
+    OrganizationMembership,
+    Group,
+    GroupMembership,
+    Task,
+)
 import specs
 
 
@@ -124,3 +131,14 @@ async def get_current_active_group_membership(
         )
 
     return group_membership
+
+
+async def get_task(organization_identifier: str, task_identifier: str):
+    task = await Task.filter(
+        Q(identifier=task_identifier)
+        & Q(group__organization__identifier=organization_identifier)
+    ).prefetch_related("group").first()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task
