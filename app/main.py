@@ -318,7 +318,19 @@ async def group_reject(
     return {"message": "Successfully rejected group invite"}
 
 
-@app.post("/organization/{organization_identifier}/group/{group_identifier}/leave")
+@app.post("/organization/{organization_identifier}/group/leave")
+async def group_leave(
+    group_membership: Annotated[
+        GroupMembership, Depends(dependecy.get_current_active_group_membership)
+    ]
+):
+    await group_membership.update_from_dict({"accepted": False, "rejected": True})
+    await group_membership.save()
+
+    return {"message": "Successfully left group"}
+
+
+@app.post("/organization/{organization_identifier}/task/create")
 async def group_leave(
     group_membership: Annotated[
         GroupMembership, Depends(dependecy.get_current_active_group_membership)

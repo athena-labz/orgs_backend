@@ -95,7 +95,6 @@ class Group(models.Model):
     # for each task based on the selected members
     source = fields.CharField(max_length=32, default="user_created")
     name = fields.CharField(max_length=128, unique=True)
-    approved = fields.BooleanField(default=False)
 
     creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
@@ -125,7 +124,39 @@ class GroupMembership(models.Model):
     invite_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
 
-# class Task(models.Model):
-#     # Student or group of stundents which are part of it
+class Task(models.Model):
+    id = fields.IntField(pk=True)
 
-#     pass
+    name = fields.CharField(max_length=128, unique=True)
+    description = fields.CharField(max_length=1024, unique=True)
+    deadline = fields.DatetimeField()
+
+    group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
+        model_name="models.Group", related_name="tasks"
+    )  # Participants of the task
+
+    is_approved_start = fields.BooleanField(default=False)  # By teacher
+    is_rejected_start = fields.BooleanField(default=False)
+
+    is_approved_completed = fields.BooleanField(default=False)  # By teacher
+    is_rejected_completed = fields.BooleanField(default=False)
+
+    creation_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+
+class TaskAction(models.Model):
+    name = fields.CharField(max_length=128, unique=True)
+    description = fields.CharField(max_length=1024, unique=True)
+    deadline = fields.DatetimeField()
+
+    author: fields.ForeignKeyRelation["User"] = fields.ForeignKeyField(
+        model_name="models.User", related_name="actions"
+    )  # Who is doing this action?
+    task: fields.ForeignKeyRelation["Task"] = fields.ForeignKeyField(
+        model_name="models.Task", related_name="actions"
+    )  # Which task does this refer to?
+
+    is_submission = fields.BooleanField(default=False)
+    is_review = fields.BooleanField(default=False)
+
+    action_date = fields.DatetimeField(default=datetime.datetime.utcnow)

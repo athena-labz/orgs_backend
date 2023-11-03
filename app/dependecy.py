@@ -91,9 +91,7 @@ async def get_current_group_membership(
         raise HTTPException(status_code=400, detail="Group does not exist")
 
     group_membership = (
-        await GroupMembership.filter(
-            Q(user=current_membership.user) & Q(group=group)
-        )
+        await GroupMembership.filter(Q(user=current_membership.user) & Q(group=group))
         .prefetch_related("group")
         .first()
     )
@@ -106,11 +104,23 @@ async def get_current_group_membership(
 
 
 async def get_current_active_group_membership(
-    group_membership: Annotated[GroupMembership, Depends(get_current_group_membership)]
+    current_membership: Annotated[
+        OrganizationMembership, Depends(get_current_user_membership)
+    ]
 ):
-    if group_membership.accepted is not True:
+    group_membership = (
+        await GroupMembership.filter(
+            Q(user=current_membership.user)
+            & Q(group__organization=current_membership.organization)
+            & Q(accepted=True)
+        )
+        .prefetch_related("group")
+        .first()
+    )
+    if group_membership is None:
         raise HTTPException(
-            status_code=400, detail="User has not accepted this group yet"
+            status_code=400,
+            detail="User has no active membership with this organization",
         )
 
     return group_membership
