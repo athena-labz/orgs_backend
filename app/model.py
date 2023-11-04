@@ -73,11 +73,14 @@ class OrganizationMembership(models.Model):
     id = fields.IntField(pk=True)
 
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        model_name="models.User", related_name="membership_organizations"
+        model_name="models.User", related_name="membership_organizations", index=True
     )
     organization: fields.ForeignKeyRelation[Organization] = fields.ForeignKeyField(
-        model_name="models.Organization", related_name="membership_users"
+        model_name="models.Organization", related_name="membership_users", index=True
     )
+
+    # Area the student selected for this organization
+    area = fields.CharField(max_length=64, null=True)
 
     membership_date = fields.DatetimeField(default=datetime.datetime.utcnow)
 
@@ -136,7 +139,7 @@ class Task(models.Model):
     deadline = fields.DatetimeField()
 
     group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
-        model_name="models.Group", related_name="tasks"
+        model_name="models.Group", related_name="tasks", index=True
     )  # Participants of the task
 
     is_approved_start = fields.BooleanField(default=False)  # By teacher

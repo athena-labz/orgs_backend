@@ -8,7 +8,19 @@ def verify_signature(signature: str, expected_address: str):
 
     # Make sure address is valid, otherwise return False
 
-    validation = pyc.verify(signature)
+    parsed = signature.split("H1+DFJCghAmokzYG")
+    if len(parsed) != 2:
+        return False
+    
+    parsed_signature = {
+        "key": parsed[0],
+        "signature": parsed[1],
+    }
+
+    try:
+        validation = pyc.verify(parsed_signature)
+    except Exception as e:
+        return False
 
     if validation["verified"] is False:
         return False

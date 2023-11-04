@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.expressions import Q
@@ -34,6 +35,16 @@ DATABASE = environment.get("DATABASE")
 # https://fastapi.tiangolo.com/tutorial/bigger-applications/
 app = FastAPI()
 
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.post("/token", response_model=specs.TokenSpec)
 async def login_for_access_token(
@@ -56,7 +67,7 @@ async def login_for_access_token(
 
 
 @app.get("/users/me/", response_model=specs.UserSpec)
-async def read_users_me(
+async def user_read(
     current_user: Annotated[specs.UserSpec, Depends(dependecy.get_current_active_user)]
 ):
     pydantic_user = await specs.UserSpec.from_tortoise_orm(current_user)
@@ -137,7 +148,7 @@ async def organization_create(
 @app.get(
     "/organization/{organization_identifier}", response_model=specs.OrganizationSpec
 )
-async def organization_view(organization_identifier: str):
+async def organization_read(organization_identifier: str):
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -199,9 +210,48 @@ async def organization_join(
             status_code=400, detail="Organizer cannot join any organizations"
         )
 
-    await OrganizationMembership.create(user=current_user, organization=organization)
+    if body.area is not None and body.area not in organization.areas:
+        raise HTTPException(
+            status_code=400, detail="Area selected does not exist in this organization"
+        )
+
+    await OrganizationMembership.create(
+        user=current_user, organization=organization, area=body.area
+    )
 
     return {"message": f"Successfully joined {organization_identifier}"}
+
+
+@app.get(
+    "/organization/{organization_identifier}/users",
+    response_model=specs.OrganizationUsersResponse,
+)
+async def organization_users_read(
+    organization_identifier: str,
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    organization_memberships = await (
+        OrganizationMembership.filter(organization__identifier=organization_identifier)
+        .order_by("-membership_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .prefetch_related("user")
+        .all()
+    )
+
+    count_users = await OrganizationMembership.filter(
+        organization__identifier=organization_identifier
+    ).count()
+    max_page = (count_users // (count + 1)) + 1
+
+    pydantic_users = []
+    for membership in organization_memberships:
+        pydantic_users.append(await specs.UserSpec.from_tortoise_orm(membership.user))
+
+    return specs.OrganizationUsersResponse(
+        current_page=page, max_page=max_page, users=pydantic_users
+    )
 
 
 @app.post(
@@ -245,6 +295,11 @@ async def group_create(
                 status_code=400, detail="Group participant account not found"
             )
 
+        if member_user.type != UserType.STUDENT.value:
+            raise HTTPException(
+                status_code=400, detail="Group participant is not student"
+            )
+
         membership = (
             await OrganizationMembership.filter(
                 Q(user=member_user) & Q(organization=organization)
@@ -256,6 +311,12 @@ async def group_create(
             raise HTTPException(
                 status_code=400,
                 detail="Group participant is not a member of this organization",
+            )
+
+        if membership.area != current_membership.area:
+            raise HTTPException(
+                status_code=400,
+                detail="Group participant has different area than leader",
             )
 
         if await group.is_member_of_group(membership):
@@ -375,7 +436,7 @@ async def group_task_create(
     "/organization/{organization_identifier}/task/{task_identifier}",
     response_model=specs.TaskSpec,
 )
-async def get_task(task: Annotated[Task, Depends(dependecy.get_task)]):
+async def task_read(task: Annotated[Task, Depends(dependecy.get_task)]):
     pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
 
     return pydantic_task
@@ -423,7 +484,7 @@ async def task_start_reject(
         raise HTTPException(
             status_code=400, detail="Only teacher can approve task start"
         )
-    
+
     if task.is_approved_start or task.is_rejected_start:
         raise HTTPException(status_code=400, detail="Task has already started")
 
@@ -591,6 +652,43 @@ async def task_submission_review(
     await task_action.save()
 
     return {"message": "Successfully asked for a task resubmission"}
+
+
+@app.get(
+    "/users/me/organization/{organization_identifier}/tasks",
+    response_model=specs.UserTasksResponse,
+)
+async def user_tasks_read(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    group_membership = await group.get_user_group_membership(current_membership)
+    if group_membership is None:
+        return specs.UserTasksResponse(current_page=1, max_page=1, tasks=[])
+
+    await group_membership.fetch_related("group")
+
+    # Page 1 must be from first element to count element
+    # Page 2 must be from count element to 2*count element
+    tasks = (
+        Task.filter(group=group_membership.group)
+        .order_by("-creation_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .all()
+    )
+
+    count_tasks = await Task.filter(group=group_membership.group).count()
+    max_page = (count_tasks // (count + 1)) + 1
+
+    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
+
+    return specs.UserTasksResponse(
+        current_page=page, max_page=max_page, tasks=pydantic_tasks
+    )
 
 
 register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})

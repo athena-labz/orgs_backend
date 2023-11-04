@@ -50,6 +50,7 @@ class EditOrganizationBodySpec(BaseModel):
 
 class JoinOrganizationBodySpec(BaseModel):
     password: str
+    area: Optional[Annotated[str, Field(max_length=64, null=True)]] = None
 
 
 class CreateGroupBodySpec(BaseModel):
@@ -80,3 +81,16 @@ class RejectTaskBodySpec(BaseModel):
 class ReviewTaskBodySpec(BaseModel):
     description: Annotated[str, Field(max_length=1024)]
     extended_deadline: Optional[datetime.datetime] = None
+
+
+class ListResponse(BaseModel):
+    current_page: int
+    max_page: int
+
+
+class UserTasksResponse(ListResponse):
+    tasks: list[TaskSpec]
+
+
+class OrganizationUsersResponse(ListResponse):
+    users: list[UserSpec]
