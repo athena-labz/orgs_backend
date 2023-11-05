@@ -4,7 +4,7 @@ import time
 
 
 def verify_signature(signature: str, expected_address: str):
-    return signature == "sig"
+    # return signature == "sig" 
 
     # Make sure address is valid, otherwise return False
 

@@ -16,8 +16,10 @@ from model import (
     Group,
     GroupMembership,
     Task,
+    TaskReward,
     TaskAction,
 )
+
 from lib import cardano, auth, environment, utils, group
 
 import dependecy
@@ -72,6 +74,35 @@ async def user_read(
 ):
     pydantic_user = await specs.UserSpec.from_tortoise_orm(current_user)
     return pydantic_user
+
+
+@app.get("/users/me/organizations", response_model=specs.UserOrganizationsResponse)
+async def user_organizations_read(
+    current_user: Annotated[specs.UserSpec, Depends(dependecy.get_current_active_user)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    organization_memberships = await (
+        OrganizationMembership.filter(user=current_user)
+        .order_by("-membership_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .prefetch_related("organization")
+        .all()
+    )
+
+    count_users = await OrganizationMembership.filter(user=current_user).count()
+    max_page = (count_users // (count + 1)) + 1
+
+    pydantic_organizations = []
+    for membership in organization_memberships:
+        pydantic_organizations.append(
+            await specs.OrganizationSpec.from_tortoise_orm(membership.organization)
+        )
+
+    return specs.UserOrganizationsResponse(
+        current_page=page, max_page=max_page, organizations=pydantic_organizations
+    )
 
 
 @app.post("/users/register", response_model=specs.UserSpec)
@@ -158,6 +189,39 @@ async def organization_read(organization_identifier: str):
     return pydantic_organization
 
 
+@app.get(
+    "/organization/{organization_identifier}/tasks",
+    response_model=specs.TasksResponse,
+)
+async def organization_tasks_read(
+    organization_identifier: str,
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Page 1 must be from first element to count element
+    # Page 2 must be from count element to 2*count element
+    tasks = (
+        Task.filter(group__organization=organization)
+        .order_by("-creation_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .all()
+    )
+
+    count_tasks = await Task.filter(group__organization=organization).count()
+    max_page = (count_tasks // (count + 1)) + 1
+
+    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
+
+    return specs.TasksResponse(
+        current_page=page, max_page=max_page, tasks=pydantic_tasks
+    )
+
+
 @app.post(
     "/organization/{organization_identifier}/edit",
     response_model=specs.OrganizationSpec,
@@ -198,6 +262,15 @@ async def organization_join(
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    # If user has already joined organization, return 400
+    existing_membership = await OrganizationMembership.filter(
+        organization=organization, user=current_user
+    ).first()
+    if existing_membership is not None:
+        raise HTTPException(
+            status_code=400, detail="User is already part of this organization"
+        )
 
     if current_user.type == UserType.STUDENT.value:
         if body.password != organization.students_password:
@@ -254,6 +327,46 @@ async def organization_users_read(
     )
 
 
+@app.get(
+    "/users/me/organization/{organization_identifier}/groups",
+    response_model=specs.OrganizationGroupsResponse,
+)
+async def organization_groups_read(
+    organization_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    group_memberships = await (
+        GroupMembership.filter(user=organization_membership.user)
+        .order_by("-invite_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .prefetch_related("group")
+        .all()
+    )
+
+    count_groups = await OrganizationMembership.filter(
+        user=organization_membership.user
+    ).count()
+    max_page = (count_groups // (count + 1)) + 1
+
+    pydantic_groups_membership = []
+    for membership in group_memberships:
+        group_membership = await specs.GroupMembershipSpec.from_tortoise_orm(membership)
+
+        pydantic_groups_membership.append(
+            specs.GroupMembershipExtendedSpec(
+                **group_membership.model_dump(), group=membership.group
+            )
+        )
+
+    return specs.OrganizationGroupsResponse(
+        current_page=page, max_page=max_page, groups=pydantic_groups_membership
+    )
+
+
 @app.post(
     "/organization/{organization_identifier}/group/create",
     response_model=specs.GroupSpec,
@@ -288,7 +401,7 @@ async def group_create(
         raise HTTPException(status_code=400, detail="Group identifier taken")
 
     members = []  # This is so we don't change the database until everything is okay
-    for member_email, reward in body.members.items():
+    for member_email in body.members:
         member_user = await User.filter(email=member_email).first()
         if member_user is None:
             raise HTTPException(
@@ -325,7 +438,7 @@ async def group_create(
                 detail="Group participant is already member of a group",
             )
 
-        members.append((member_user, reward))
+        members.append(member_user)
 
     created_group = await Group.create(
         identifier=body.identifier, name=body.name, organization=organization
@@ -334,15 +447,12 @@ async def group_create(
     await GroupMembership.create(
         group=created_group,
         user=user,
-        reward_tokens=body.leader_reward,
         accepted=True,
         leader=True,
     )
 
-    for member_user, reward in members:
-        await GroupMembership.create(
-            group=created_group, user=member_user, reward_tokens=reward
-        )
+    for member_user in members:
+        await GroupMembership.create(group=created_group, user=member_user)
 
     pydantic_group = await specs.GroupSpec.from_tortoise_orm(created_group)
 
@@ -419,6 +529,31 @@ async def group_task_create(
     if existing_task is not None:
         raise HTTPException(status_code=400, detail="Task identifier taken")
 
+    # Get group members
+    group_members = (
+        await GroupMembership.filter(Q(group=group_membership.group) & Q(accepted=True))
+        .prefetch_related("user")
+        .all()
+    )
+
+    # Map group members to email
+    rewards = {}
+    for member in group_members:
+        if not member.user.email in body.rewards:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User {member.user.email} was left without rewards",
+            )
+
+        rewards[member.user.email] = (body.rewards[member.user.email], member)
+
+    for email in body.rewards.keys():
+        if not email in rewards:
+            raise HTTPException(
+                status_code=400,
+                detail="Select reward for user not member of this group",
+            )
+
     task = await Task.create(
         identifier=body.identifier,
         name=body.name,
@@ -426,6 +561,9 @@ async def group_task_create(
         deadline=body.deadline,
         group=group_membership.group,
     )
+
+    for reward, member in rewards.values():
+        await TaskReward.create(group_member=member, task=task, reward=reward)
 
     pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
 
@@ -656,7 +794,7 @@ async def task_submission_review(
 
 @app.get(
     "/users/me/organization/{organization_identifier}/tasks",
-    response_model=specs.UserTasksResponse,
+    response_model=specs.TasksResponse,
 )
 async def user_tasks_read(
     current_membership: Annotated[
@@ -667,7 +805,7 @@ async def user_tasks_read(
 ):
     group_membership = await group.get_user_group_membership(current_membership)
     if group_membership is None:
-        return specs.UserTasksResponse(current_page=1, max_page=1, tasks=[])
+        return specs.TasksResponse(current_page=1, max_page=1, tasks=[])
 
     await group_membership.fetch_related("group")
 
@@ -686,7 +824,7 @@ async def user_tasks_read(
 
     pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
 
-    return specs.UserTasksResponse(
+    return specs.TasksResponse(
         current_page=page, max_page=max_page, tasks=pydantic_tasks
     )
 

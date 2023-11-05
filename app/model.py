@@ -24,7 +24,8 @@ class User(models.Model):
     token = fields.CharField(max_length=256, null=True)
 
     # If the current user is active / verified
-    active = fields.BooleanField(default=False)
+    # active = fields.BooleanField(default=False)
+    active = fields.BooleanField(default=True)
     email_validation_string = fields.CharField(
         max_length=128, default=utils.string_generator
     )
@@ -119,12 +120,16 @@ class GroupMembership(models.Model):
     )
 
     leader = fields.BooleanField(default=False)
-    reward_tokens: fields.BigIntField()
-
     accepted = fields.BooleanField(default=False)
     rejected = fields.BooleanField(default=False)
 
     invite_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+    class PydanticMeta:
+        exclude = ["id"]
+
+
+GroupMembershipSpec = pydantic_model_creator(GroupMembership, name="GroupMembership")
 
 
 class Task(models.Model):
@@ -157,6 +162,19 @@ class Task(models.Model):
 
 
 TaskSpec = pydantic_model_creator(Task, name="Task")
+
+
+class TaskReward(models.Model):
+    id = fields.IntField(pk=True)
+
+    reward = fields.BigIntField()
+
+    group_member: fields.ForeignKeyRelation["GroupMembership"] = fields.ForeignKeyField(
+        model_name="models.GroupMembership", related_name="task_rewards"
+    )
+    task: fields.ForeignKeyRelation["Task"] = fields.ForeignKeyField(
+        model_name="models.Task", related_name="rewards"
+    )
 
 
 class TaskAction(models.Model):

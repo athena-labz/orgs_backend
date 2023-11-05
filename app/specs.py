@@ -6,6 +6,7 @@ from model import (
     OrganizationSpec,
     UserType,
     GroupSpec,
+    GroupMembershipSpec,
     TaskSpec,
 )
 
@@ -56,16 +57,16 @@ class JoinOrganizationBodySpec(BaseModel):
 class CreateGroupBodySpec(BaseModel):
     identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
     name: Annotated[str, Field(max_length=128)]
-    leader_reward: int
     members: Annotated[
-        dict[str, int], Field(max_length=4, min_length=1)
-    ]  # map of stake address and reward
+        list[str], Field(max_length=4, min_length=1)
+    ]  # list of emails
 
 
 class CreateTaskBodySpec(BaseModel):
     identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
     name: Annotated[str, Field(max_length=128)]
     description: Annotated[str, Field(max_length=1024)]
+    rewards: dict[str, int]  # map of stake address to reward
     deadline: datetime.datetime
 
 
@@ -88,9 +89,21 @@ class ListResponse(BaseModel):
     max_page: int
 
 
-class UserTasksResponse(ListResponse):
+class TasksResponse(ListResponse):
     tasks: list[TaskSpec]
 
 
 class OrganizationUsersResponse(ListResponse):
     users: list[UserSpec]
+
+
+class UserOrganizationsResponse(ListResponse):
+    organizations: list[OrganizationSpec]
+
+
+class GroupMembershipExtendedSpec(GroupMembershipSpec):
+    group: GroupSpec
+
+
+class OrganizationGroupsResponse(ListResponse):
+    groups: list[GroupMembershipExtendedSpec]
