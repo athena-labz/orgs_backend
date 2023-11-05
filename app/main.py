@@ -726,6 +726,7 @@ async def task_submission_approve(
         OrganizationMembership, Depends(dependecy.get_current_user_membership)
     ],
     task: Annotated[Task, Depends(dependecy.get_task)],
+    body: specs.RejectTaskBodySpec,
 ):
     if current_membership.user.type != UserType.TEACHER.value:
         raise HTTPException(
@@ -745,7 +746,7 @@ async def task_submission_approve(
     )
     task_action = TaskAction(
         name="Approve task submission",
-        description="",
+        description=body.description,
         author=current_membership.user,
         task=task,
         is_review=True,
