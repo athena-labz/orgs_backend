@@ -8,6 +8,7 @@ from model import (
     GroupSpec,
     GroupMembershipSpec,
     TaskSpec,
+    TaskActionSpec
 )
 
 import datetime
@@ -91,6 +92,10 @@ class ListResponse(BaseModel):
 
 class TasksResponse(ListResponse):
     tasks: list[TaskSpec]
+
+
+class TaskActionsResponse(ListResponse):
+    actions: list[TaskActionSpec]
 
 
 class OrganizationUsersResponse(ListResponse):

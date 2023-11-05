@@ -580,6 +580,51 @@ async def task_read(task: Annotated[Task, Depends(dependecy.get_task)]):
     return pydantic_task
 
 
+@app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}/members",
+    response_model=list[specs.UserSpec],
+)
+async def task_members_read(task: Annotated[Task, Depends(dependecy.get_task)]):
+    members = (
+        await GroupMembership.filter(Q(group=task.group) & Q(accepted=True))
+        .prefetch_related("user")
+        .all()
+    )
+
+    users = []
+    for member in members:
+        users.append(await specs.UserSpec.from_tortoise_orm(member.user))
+
+    return users
+
+
+@app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}/actions",
+    response_model=specs.TaskActionsResponse,
+)
+async def task_actions_read(
+    task: Annotated[Task, Depends(dependecy.get_task)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    task_actions = (
+        TaskAction.filter(task=task)
+        .order_by("-action_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .all()
+    )
+
+    count_tasks = await TaskAction.filter(task=task).count()
+    max_page = (count_tasks // (count + 1)) + 1
+
+    pydantic_actions = await specs.TaskActionSpec.from_queryset(task_actions)
+
+    return specs.TaskActionsResponse(
+        current_page=page, max_page=max_page, actions=pydantic_actions
+    )
+
+
 @app.post(
     "/organization/{organization_identifier}/task/{task_identifier}/start/approve"
 )

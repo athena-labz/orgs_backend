@@ -194,3 +194,10 @@ class TaskAction(models.Model):
     is_review = fields.BooleanField(default=False)
 
     action_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+
+    class PydanticMeta:
+        exclude = ["id"]
+
+
+TaskActionSpec = pydantic_model_creator(TaskAction, name="TaskAction")
+
