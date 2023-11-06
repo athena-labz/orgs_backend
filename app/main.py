@@ -48,6 +48,11 @@ app.add_middleware(
 )
 
 
+@app.get("/health")
+async def health():
+    return {}
+
+
 @app.post("/token", response_model=specs.TokenSpec)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
