@@ -3,6 +3,7 @@ from lib import cardano, environment
 
 from jose import jwt
 import datetime
+import pycardano as pyc
 
 
 ALGORITHM = environment.get("ALGORITHM")

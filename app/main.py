@@ -112,6 +112,18 @@ async def user_organizations_read(
 
 @app.post("/users/register", response_model=specs.UserSpec)
 async def register(body: specs.RegisterBodySpec):
+    try:
+        address = pyc.Address.from_primitive(body.stake_address)
+    except Exception as e:
+        print(f"Error while trying to convert stake address {e}")
+        raise HTTPException(status_code=400, detail="Invalid stake address format")
+
+    if address.network != pyc.Network.MAINNET:
+        raise HTTPException(
+            status_code=400,
+            detail="Stake address is from preprod, but it must be from mainnet",
+        )
+
     if not cardano.verify_signature(body.signature, body.stake_address):
         raise HTTPException(status_code=400, detail="Invalid signature")
 

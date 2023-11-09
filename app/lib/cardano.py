@@ -36,7 +36,7 @@ def verify_signature(signature: str, expected_address: str):
 
     if (
         validation["message"][:54]
-        != "=====ONLY SIGN THIS IF YOU ARE IN athenateams.com====="
+        != "======ONLY SIGN IF YOU ARE IN app.athenalabo.com======"
     ):
         return False
 
