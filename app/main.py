@@ -210,10 +210,7 @@ async def organization_read(organization_identifier: str):
     return pydantic_organization
 
 
-@app.get(
-    "/organization/{organization_identifier}/areas",
-    response_model=specs.OrganizationSpec,
-)
+@app.get("/organization/{organization_identifier}/areas")
 async def organization_areas_read(organization_identifier: str):
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
@@ -325,7 +322,7 @@ async def organization_join(
         )
 
     await OrganizationMembership.create(
-        user=current_user, organization=organization, area=body.area.lower()
+        user=current_user, organization=organization, area=None if body.area is None else body.area.lower()
     )
 
     return {"message": f"Successfully joined {organization_identifier}"}
