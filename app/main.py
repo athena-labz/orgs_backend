@@ -188,6 +188,9 @@ async def organization_create(
         areas=body.areas,
         admin=current_user,
     )
+
+    await OrganizationMembership.create(user=current_user, organization=organization)
+
     pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
 
     return pydantic_organization

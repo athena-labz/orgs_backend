@@ -13,6 +13,7 @@ class UserType(Enum):
     STUDENT = "student"
     TEACHER = "teacher"
     ORGANIZER = "organizer"
+    SUPERVISOR = "supervisor"
 
 
 class User(models.Model):
