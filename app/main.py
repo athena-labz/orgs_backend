@@ -654,7 +654,7 @@ async def task_start_approve(
     ],
     task: Annotated[Task, Depends(dependecy.get_task)],
 ):
-    if current_membership.user.type != UserType.TEACHER.value:
+    if not auth.has_review_privileges(current_membership.user):
         raise HTTPException(
             status_code=400, detail="Only teacher can approve task start"
         )
@@ -683,9 +683,9 @@ async def task_start_reject(
     ],
     task: Annotated[Task, Depends(dependecy.get_task)],
 ):
-    if current_membership.user.type != UserType.TEACHER.value:
+    if not auth.has_review_privileges(current_membership.user):
         raise HTTPException(
-            status_code=400, detail="Only teacher can approve task start"
+            status_code=400, detail="Does not have permission to approve task start"
         )
 
     if task.is_approved_start or task.is_rejected_start:
@@ -748,9 +748,10 @@ async def task_submission_approve(
     task: Annotated[Task, Depends(dependecy.get_task)],
     body: specs.RejectTaskBodySpec,
 ):
-    if current_membership.user.type != UserType.TEACHER.value:
+    if not auth.has_review_privileges(current_membership.user):
         raise HTTPException(
-            status_code=400, detail="Only teacher can approve task submission"
+            status_code=400,
+            detail="User does not have permission to approve task submission",
         )
 
     if not task.is_approved_start:
@@ -788,9 +789,10 @@ async def task_submission_reject(
     task: Annotated[Task, Depends(dependecy.get_task)],
     body: specs.RejectTaskBodySpec,
 ):
-    if current_membership.user.type != UserType.TEACHER.value:
+    if not auth.has_review_privileges(current_membership.user):
         raise HTTPException(
-            status_code=400, detail="Only teacher can reject task submission"
+            status_code=400,
+            detail="User does not have permission to reject task submission",
         )
 
     if not task.is_approved_start:
@@ -828,9 +830,10 @@ async def task_submission_review(
     task: Annotated[Task, Depends(dependecy.get_task)],
     body: specs.ReviewTaskBodySpec,
 ):
-    if current_membership.user.type != UserType.TEACHER.value:
+    if not auth.has_review_privileges(current_membership.user):
         raise HTTPException(
-            status_code=400, detail="Only teacher can reject task submission"
+            status_code=400,
+            detail="User does not have permission to review task submission",
         )
 
     if not task.is_approved_start:
