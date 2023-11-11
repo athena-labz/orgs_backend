@@ -38,6 +38,7 @@ class CreateOrganizationBodySpec(BaseModel):
     description: Annotated[str, Field(max_length=512)]
     students_password: Annotated[str, Field(max_length=32)]
     teachers_password: Annotated[str, Field(max_length=32)]
+    supervisor_password: Annotated[str, Field(max_length=32)]
     areas: Annotated[list[str], Field(max_length=10)]
 
 

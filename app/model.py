@@ -55,6 +55,7 @@ class Organization(models.Model):
 
     students_password = fields.CharField(max_length=32)
     teachers_password = fields.CharField(max_length=32)
+    supervisor_password = fields.CharField(max_length=32)
 
     areas = fields.JSONField()  # should be array of string
 

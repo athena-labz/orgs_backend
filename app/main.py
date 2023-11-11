@@ -185,7 +185,8 @@ async def organization_create(
         description=body.description,
         students_password=body.students_password,
         teachers_password=body.teachers_password,
-        areas=body.areas,
+        supervisor_password=body.supervisor_password,
+        areas=[area.lower() for area in body.areas],
         admin=current_user,
     )
 
@@ -207,6 +208,18 @@ async def organization_read(organization_identifier: str):
     pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
 
     return pydantic_organization
+
+
+@app.get(
+    "/organization/{organization_identifier}/areas",
+    response_model=specs.OrganizationSpec,
+)
+async def organization_areas_read(organization_identifier: str):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return organization.areas
 
 
 @app.get(
@@ -298,18 +311,21 @@ async def organization_join(
     elif current_user.type == UserType.TEACHER.value:
         if body.password != organization.teachers_password:
             raise HTTPException(status_code=400, detail="Wrong teacher password")
+    elif current_user.type == UserType.SUPERVISOR.value:
+        if body.password != organization.supervisor_password:
+            raise HTTPException(status_code=400, detail="Wrong supervisor password")
     else:
         raise HTTPException(
             status_code=400, detail="Organizer cannot join any organizations"
         )
 
-    if body.area is not None and body.area not in organization.areas:
+    if body.area is not None and body.area.lower() not in organization.areas:
         raise HTTPException(
             status_code=400, detail="Area selected does not exist in this organization"
         )
 
     await OrganizationMembership.create(
-        user=current_user, organization=organization, area=body.area
+        user=current_user, organization=organization, area=body.area.lower()
     )
 
     return {"message": f"Successfully joined {organization_identifier}"}
