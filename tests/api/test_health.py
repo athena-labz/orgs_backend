@@ -1,11 +1,10 @@
-# from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
-# from tests.fixtures import *
-# from app.main import app
+from app.main import app
 
 
-# def test_health(test_client: TestClient):
-#     response = test_client.get("/health")
+# def test_health(client: TestClient):
+#     response = client.get("/health")
     
 #     assert response.status_code == 200
 #     assert response.json() == {}

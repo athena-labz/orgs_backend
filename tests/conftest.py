@@ -4,9 +4,18 @@ from fastapi.testclient import TestClient
 from tortoise import Tortoise
 
 import asyncio
+import logging
 import pytest
 
 DB_URL = "sqlite://:memory:"
+
+
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(filename)s:%(lineno)s %(levelname)s:%(message)s",
+        force=True,
+    )
 
 
 async def init_db():
@@ -23,20 +32,21 @@ async def init():
     await init_db()
 
 
-@pytest.fixture(scope="session")
-async def client():
-    client = TestClient(app)
-    with client as c:
-        yield c
-
-
 @pytest.fixture(scope="session", autouse=True)
 async def initialize_tests():
+    setup_logging()
     await init()
 
     yield
 
     await Tortoise.close_connections()
+
+
+# @pytest.fixture(scope="session")
+# async def client():
+#     client = TestClient(app)
+#     with client as c:
+#         yield c
 
 
 @pytest.fixture(scope="session", autouse=True)
