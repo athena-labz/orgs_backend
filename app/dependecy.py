@@ -44,7 +44,6 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 
         token_data = specs.TokenDataSpec(username=username)
     except JWTError as e:
-        print(e)
         raise credentials_exception
 
     user = await User.filter(stake_address=token_data.username).first()

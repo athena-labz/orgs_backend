@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from tortoise.contrib.fastapi import register_tortoise
 from tortoise.expressions import Q
 
-from model import (
+from app.model import (
     User,
     UserType,
     Organization,
@@ -20,17 +20,23 @@ from model import (
     TaskAction,
 )
 
-from lib import cardano, auth, environment, utils, group
+from app.lib import cardano, auth, environment, utils, group
 
 import dependecy
 import specs
 
 import pycardano as pyc
 import datetime
+import logging
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = environment.get("ACCESS_TOKEN_EXPIRE_MINUTES", int)
 DATABASE = environment.get("DATABASE")
+
+
+logging.basicConfig(
+    level=logging.INFO, format="%(filename)s:%(lineno)s %(levelname)s:%(message)s"
+)
 
 
 # https://fastapi.tiangolo.com
@@ -115,7 +121,7 @@ async def register(body: specs.RegisterBodySpec):
     try:
         address = pyc.Address.from_primitive(body.stake_address)
     except Exception as e:
-        print(f"Error while trying to convert stake address {e}")
+        logging.error(f"Error while trying to convert stake address {e}")
         raise HTTPException(status_code=400, detail="Invalid stake address format")
 
     if address.network != pyc.Network.MAINNET:
@@ -150,7 +156,6 @@ async def confirm_email(
         raise HTTPException(status_code=400, detail="Email already verified")
 
     if email_validation_string != current_user.email_validation_string:
-        print(email_validation_string, current_user.email_validation_string)
         await current_user.update_from_dict(
             {"email_validation_string": utils.string_generator()}
         )
@@ -322,7 +327,9 @@ async def organization_join(
         )
 
     await OrganizationMembership.create(
-        user=current_user, organization=organization, area=None if body.area is None else body.area.lower()
+        user=current_user,
+        organization=organization,
+        area=None if body.area is None else body.area.lower(),
     )
 
     return {"message": f"Successfully joined {organization_identifier}"}

@@ -1,5 +1,5 @@
 from tortoise.expressions import Q
-from model import OrganizationMembership, Group, GroupMembership, User
+from app.model import OrganizationMembership, Group, GroupMembership, User
 
 
 async def get_user_group_membership(membership: OrganizationMembership):

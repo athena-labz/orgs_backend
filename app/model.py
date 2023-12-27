@@ -1,7 +1,7 @@
 from tortoise import fields, models
 from tortoise.contrib.pydantic import pydantic_model_creator
 
-from lib import utils
+from app.lib import utils
 
 from enum import Enum
 

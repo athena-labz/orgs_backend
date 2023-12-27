@@ -1,9 +1,8 @@
-from model import User, UserType
-from lib import cardano, environment
+from app.model import User, UserType
+from app.lib import cardano, environment
 
 from jose import jwt
 import datetime
-import pycardano as pyc
 
 
 ALGORITHM = environment.get("ALGORITHM")
