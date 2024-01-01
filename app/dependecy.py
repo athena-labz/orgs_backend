@@ -8,8 +8,8 @@ from tortoise.expressions import Q
 
 from jose import jwt, JWTError
 
-from lib import environment
-from model import (
+from app.lib import environment
+from app.model import (
     User,
     Organization,
     OrganizationMembership,
@@ -45,11 +45,11 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = specs.TokenDataSpec(username=username)
     except JWTError as e:
         raise credentials_exception
-
+    
     user = await User.filter(stake_address=token_data.username).first()
     if user is None:
         raise credentials_exception
-
+    
     return user
 
 

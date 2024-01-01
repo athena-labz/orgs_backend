@@ -84,6 +84,7 @@ async def user_read(
     current_user: Annotated[specs.UserSpec, Depends(dependecy.get_current_active_user)]
 ):
     pydantic_user = await specs.UserSpec.from_tortoise_orm(current_user)
+
     return pydantic_user
 
 

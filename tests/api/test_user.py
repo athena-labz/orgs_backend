@@ -49,3 +49,30 @@ async def test_login():
         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eTNmejNha21xMHI5eTIwOXB4d2gwbHd0ZHd5azRncXdtZ3JuaGQ0N3IyY3V2c3ZubWFsNyIsImV4cCI6MTcwMzg2MjAwMH0.y4B4aczvi6mCoq21KxcsRBm7ZQlAobOfcXgoml5wc7g",
         "token_type": "bearer",
     }
+
+
+@freeze_time("2023-12-28 15:00:00")
+async def test_get_user():
+    client = TestClient(app)
+
+    stake_address = "stake1uxc4fxd6r4rjgm38aqlkac85vu5arvm6q8m3wmy43h0h3dcs9dvnu"
+    signature = "a4010103272006215820daa3c23a81fe0388077ed23f016b61488af35ed73ce066d564404980a241b25eH1+DFJCghAmokzYG84582aa201276761646472657373581de1b15499ba1d47246e27e83f6ee0f46729d1b37a01f7176c958ddf78b7a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333737353030365840b5726a056c1d936f85fd2c30193d7cfaa1d66aff6fc3668945ed7700685fa8cc21c703a5c1077b0b0a5df1e1174f42bf73401b2905fb24535e30c4a3834f7401"
+
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eGM0ZnhkNnI0cmpnbTM4YXFsa2FjODV2dTVhcnZtNnE4bTN3bXk0M2gwaDNkY3M5ZHZudSIsImV4cCI6MTcwMzg2MjAwMH0.wk-OQKV8fWu6anT9tsCTd7XEgqTLM3w6SSWAsErBtOU"
+
+    await User.create(
+        type="student",
+        email="test_get_user@email.com",
+        stake_address=stake_address,
+        active=True,
+    )
+
+    response = client.get("/users/me", headers={"Authorization": "Bearer " + token})
+
+    assert response.status_code == 200
+    assert response.json().items() >= {
+        "type": "student",
+        "email": "test_get_user@email.com",
+        "stake_address": "stake1uxc4fxd6r4rjgm38aqlkac85vu5arvm6q8m3wmy43h0h3dcs9dvnu",
+        "active": True,
+    }.items()
