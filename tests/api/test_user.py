@@ -7,7 +7,7 @@ from app import specs
 
 
 @freeze_time("2023-12-27 15:00:00")
-async def test_register():
+async def test_user_register():
     client = TestClient(app)
 
     stake_address = "stake1u88fkp0lf0txnslsk4a26l5u7p4f3enah0t7e4v63795hygh70tj7"
@@ -29,7 +29,7 @@ async def test_register():
 
 
 @freeze_time("2023-12-28 15:00:00")
-async def test_login():
+async def test_user_login():
     client = TestClient(app)
 
     stake_address = "stake1uy3fz3akmq0r9y209pxwh0lwtdwyk4gqwmgrnhd47r2cuvsvnmal7"
@@ -51,8 +51,14 @@ async def test_login():
     }
 
 
+@freeze_time("2023-12-27 15:00:00")
+async def test_user_confirm_email():
+    client = TestClient(app)
+    assert False
+
+
 @freeze_time("2023-12-28 15:00:00")
-async def test_get_user():
+async def test_user_read():
     client = TestClient(app)
 
     stake_address = "stake1uxc4fxd6r4rjgm38aqlkac85vu5arvm6q8m3wmy43h0h3dcs9dvnu"
@@ -70,9 +76,24 @@ async def test_get_user():
     response = client.get("/users/me", headers={"Authorization": "Bearer " + token})
 
     assert response.status_code == 200
-    assert response.json().items() >= {
-        "type": "student",
-        "email": "test_get_user@email.com",
-        "stake_address": "stake1uxc4fxd6r4rjgm38aqlkac85vu5arvm6q8m3wmy43h0h3dcs9dvnu",
-        "active": True,
-    }.items()
+    assert (
+        response.json().items()
+        >= {
+            "type": "student",
+            "email": "test_get_user@email.com",
+            "stake_address": "stake1uxc4fxd6r4rjgm38aqlkac85vu5arvm6q8m3wmy43h0h3dcs9dvnu",
+            "active": True,
+        }.items()
+    )
+
+
+@freeze_time("2023-12-27 15:00:00")
+async def test_user_organizations_read():
+    client = TestClient(app)
+    assert False
+
+
+@freeze_time("2023-12-27 15:00:00")
+async def test_user_tasks_read():
+    client = TestClient(app)
+    assert False
