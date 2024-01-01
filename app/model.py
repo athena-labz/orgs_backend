@@ -40,16 +40,10 @@ class User(models.Model):
 UserSpec = pydantic_model_creator(User, name="User")
 
 
-class OrganizationType(Enum):
-    GROUPS = "groups"
-    INDIVIDUAL = "individual"
-
-
 class Organization(models.Model):
     id = fields.IntField(pk=True)
     identifier = fields.CharField(max_length=64, unique=True, index=True)
 
-    type = fields.CharField(max_length=16)
     name = fields.CharField(max_length=128)
     description = fields.CharField(max_length=512)
 

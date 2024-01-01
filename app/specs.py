@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field
 from typing import Annotated, Optional
 from model import (
     UserSpec,
-    OrganizationType,
     OrganizationSpec,
     UserType,
     GroupSpec,
@@ -32,7 +31,6 @@ class RegisterBodySpec(BaseModel):
 
 
 class CreateOrganizationBodySpec(BaseModel):
-    organization_type: OrganizationType
     identifier: Annotated[str, Field(max_length=64)]
     name: Annotated[str, Field(max_length=128)]
     description: Annotated[str, Field(max_length=512)]
@@ -43,7 +41,6 @@ class CreateOrganizationBodySpec(BaseModel):
 
 
 class EditOrganizationBodySpec(BaseModel):
-    organization_type: Optional[OrganizationType] = None
     name: Optional[Annotated[str, Field(max_length=128)]] = None
     description: Optional[Annotated[str, Field(max_length=512)]] = None
     students_password: Optional[Annotated[str, Field(max_length=32)]] = None

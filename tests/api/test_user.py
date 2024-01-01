@@ -2,8 +2,17 @@ from fastapi.testclient import TestClient
 from freezegun import freeze_time
 
 from app.main import app
-from app.model import User
+from app.model import (
+    User,
+    Organization,
+    OrganizationMembership,
+    Task,
+    Group,
+    GroupMembership,
+)
 from app import specs
+
+import datetime
 
 
 @freeze_time("2023-12-27 15:00:00")
@@ -54,7 +63,31 @@ async def test_user_login():
 @freeze_time("2023-12-27 15:00:00")
 async def test_user_confirm_email():
     client = TestClient(app)
-    assert False
+
+    stake_address = "stake1uxc9jqd8kkfzgs98thtlpmqkz6gngf064gs3zj9nl6gjj4gqes0sq"
+    signature = "a40101032720062158208eb44e0e4cb9e35aff24d77da9c46ee3a9495b29120826e6c741d0581f344de4H1+DFJCghAmokzYG84582aa201276761646472657373581de1b05901a7b5922440a75dd7f0ec1616913425faaa211148b3fe912955a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840045c07dcd0f1f90d7d8d17b6b3eb6b7ac89027d698385e509cc2568e7dafc5950f39e061dbbf04906f2d7cde7d627f5877c9fb8bfe4f0f2b2fa017f5f38d6800"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eGM5anFkOGtrZnpnczk4dGh0bHBtcWt6NmduZ2YwNjRnczN6ajlubDZnamo0Z3FlczBzcSIsImV4cCI6MTcwMzc3NTYwMH0._D5PHouMzoX6kHtib484v6D7UsM_j9X6301Q0HOP-Sw"
+
+    await User.create(
+        type="student",
+        email="test_user_confirm_email@email.com",
+        stake_address=stake_address,
+        active=False,
+        email_validation_string="test123",
+    )
+
+    response = client.post(
+        "/users/confirm/email",
+        headers={"Authorization": "Bearer " + token},
+        params={"email_validation_string": "test123"},
+    )
+
+    assert response.status_code == 200
+
+    user = await User.filter(email="test_user_confirm_email@email.com").first()
+
+    assert user is not None
+    assert user.active is True
 
 
 @freeze_time("2023-12-28 15:00:00")
@@ -90,10 +123,135 @@ async def test_user_read():
 @freeze_time("2023-12-27 15:00:00")
 async def test_user_organizations_read():
     client = TestClient(app)
-    assert False
+
+    stake_address = "stake1ux9f8w0dxr47ktx990yescw666snap6uvlhzrv663p6ufhgu2zwuc"
+    signature = "a4010103272006215820c1b45f0058e3cd113f765a6f04d46630195ee79ff655a74104abfab95484b7bfH1+DFJCghAmokzYG84582aa201276761646472657373581de18a93b9ed30ebeb2cc52bc99861dad6a13e875c67ee21b35a8875c4dda166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840fe439ada5c7e42e9cc8af758d6f45faec3612ab1518b0348ac2f11ecb6da4740e93b3af5520ebec3c61d9df6be87818afe9102ad5399ea9da17d42a9d2342608"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eDlmOHcwZHhyNDdrdHg5OTB5ZXNjdzY2NnNuYXA2dXZsaHpydjY2M3A2dWZoZ3Uyend1YyIsImV4cCI6MTcwMzc3NTYwMH0.LNkHkIX7tScGMZYGVs-3XRdvg8czPxCmDITpDB_bzIA"
+
+    created_user = await User.create(
+        type="student",
+        email="test_user_organizations_read@email.com",
+        stake_address=stake_address,
+        active=True,
+    )
+
+    created_organization = await Organization.create(
+        identifier="user_organizations_read_org_1",
+        name="User Organizations Read Org 1",
+        description="",
+        students_password="pass123",
+        teachers_password="pass123",
+        supervisor_password="pass123",
+        areas=[],
+        admin=created_user,
+    )
+
+    await OrganizationMembership.create(
+        user=created_user,
+        organization=created_organization,
+        area=None,
+    )
+
+    response = client.get(
+        "/users/me/organizations", headers={"Authorization": "Bearer " + token}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_page"] == 1
+    assert response.json()["max_page"] == 1
+
+    assert isinstance(response.json()["organizations"], list)
+    assert len(response.json()["organizations"]) == 1
+
+    assert (
+        response.json()["organizations"][0].items()
+        >= {
+            "identifier": "user_organizations_read_org_1",
+            "name": "User Organizations Read Org 1",
+            "description": "",
+            "supervisor_password": "pass123",
+            "areas": [],
+        }.items()
+    )
 
 
 @freeze_time("2023-12-27 15:00:00")
 async def test_user_tasks_read():
     client = TestClient(app)
-    assert False
+
+    stake_address = "stake1u8gau3yuxvuklt4q0jp83cdkmjp2ym9pjdf96wtvsmhueeqluxe7q"
+    signature = "a40101032720062158200a300bd26dca078f8b723fc99f7334ddc662d7bab550c18de200df99bd5c3c01H1+DFJCghAmokzYG84582aa201276761646472657373581de1d1de449c33396faea07c8278e1b6dc82a26ca193525d396c86efcce4a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d3137303336383932303058406761c21d75507ac47549027d1ad149ec505e2f0881e3011994b151e1b12c500242015d2c48ba7f003db68eb592daccbc75cdfcc537d2070cc1c0ed4ea0c85b08"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1OGdhdTN5dXh2dWtsdDRxMGpwODNjZGttanAyeW05cGpkZjk2d3R2c21odWVlcWx1eGU3cSIsImV4cCI6MTcwMzc3NTYwMH0.GCJ_7iSi-HSRfGeO2dhV99If65cvcTGRaboSejSonH0"
+
+    created_user = await User.create(
+        type="student",
+        email="test_user_tasks_read@email.com",
+        stake_address=stake_address,
+        active=True,
+    )
+
+    created_organization = await Organization.create(
+        identifier="test_user_tasks_read_org_1",
+        name="User Tasks Read Org 1",
+        description="",
+        students_password="pass123",
+        teachers_password="pass123",
+        supervisor_password="pass123",
+        areas=[],
+        admin=created_user,
+    )
+
+    await OrganizationMembership.create(
+        user=created_user,
+        organization=created_organization,
+        area=None,
+    )
+
+    created_group = await Group.create(
+        identifier="test_user_tasks_read_group_1",
+        name="User Tasks Read Group 1",
+        organization=created_organization,
+    )
+
+    await GroupMembership.create(
+        group=created_group,
+        user=created_user,
+        accepted=True,
+        leader=True,
+    )
+
+    await Task.create(
+        identifier="test_user_tasks_read_task_1",
+        name="User Tasks Read Task 1",
+        description="",
+        deadline=datetime.datetime(2024, 1, 1),
+        group=created_group,
+    )
+
+    response = client.get(
+        "/users/me/organization/test_user_tasks_read_org_1/tasks",
+        headers={"Authorization": "Bearer " + token},
+    )
+
+    assert response.status_code == 200
+
+    assert response.json()["current_page"] == 1
+    assert response.json()["max_page"] == 1
+
+    assert isinstance(response.json()["tasks"], list)
+    assert len(response.json()["tasks"]) == 1
+
+    assert (
+        response.json()["tasks"][0].items()
+        >= {
+            "identifier": "test_user_tasks_read_task_1",
+            "name": "User Tasks Read Task 1",
+            "description": "",
+            "deadline": "2024-01-01T00:00:00Z",
+            "is_approved_start": False,
+            "is_rejected_start": False,
+            "is_approved_completed": False,
+            "is_rejected_completed": False,
+            "is_rewards_claimed": False,
+        }.items()
+    )

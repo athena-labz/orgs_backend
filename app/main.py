@@ -12,7 +12,6 @@ from app.model import (
     UserType,
     Organization,
     OrganizationMembership,
-    OrganizationType,
     Group,
     GroupMembership,
     Task,
@@ -186,7 +185,6 @@ async def organization_create(
 
     organization = await Organization.create(
         identifier=body.identifier,
-        type=body.organization_type.value,
         name=body.name,
         description=body.description,
         students_password=body.students_password,
@@ -424,10 +422,6 @@ async def group_create(
     if not user.type == UserType.STUDENT.value:
         # Only students can create groups
         raise HTTPException(status_code=400, detail="User not of type student")
-
-    if organization.type != OrganizationType.GROUPS.value:
-        # Only organization of type groups can have manually created groups
-        raise HTTPException(status_code=400, detail="Organization not of type groups")
 
     if await group.is_member_of_group(current_membership):
         raise HTTPException(
