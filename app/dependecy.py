@@ -58,7 +58,7 @@ async def get_current_active_user(
 ):
     if not current_user.active:
         raise HTTPException(status_code=400, detail="Inactive user")
-
+    
     return current_user
 
 
@@ -69,18 +69,21 @@ async def get_current_user_membership(
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=400, detail="Organization does not exist")
-
+    
     organization_membership = (
         await OrganizationMembership.filter(
             Q(user=current_user) & Q(organization=organization)
         )
-        .prefetch_related("user", "organization")
         .first()
     )
+
     if organization_membership is None:
         raise HTTPException(
             status_code=400, detail="User is not member of this organization"
         )
+
+    await organization_membership.fetch_related("user")
+    await organization_membership.fetch_related("organization")
 
     return organization_membership
 
@@ -96,7 +99,7 @@ async def get_current_group_membership(
     ).first()
     if group is None:
         raise HTTPException(status_code=400, detail="Group does not exist")
-
+    
     group_membership = (
         await GroupMembership.filter(Q(user=current_membership.user) & Q(group=group))
         .prefetch_related("group")
@@ -106,7 +109,7 @@ async def get_current_group_membership(
         raise HTTPException(
             status_code=400, detail="User has no membership with this group"
         )
-
+    
     return group_membership
 
 

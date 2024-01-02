@@ -1,5 +1,5 @@
 from tortoise import Tortoise, run_async
-from lib import environment
+from app.lib import environment
 
 
 DATABASE = environment.get("DATABASE")

@@ -549,12 +549,15 @@ async def group_reject(
     return {"message": "Successfully rejected group invite"}
 
 
-@app.post("/organization/{organization_identifier}/group/leave")
+@app.post("/organization/{organization_identifier}/group/{group_identifier}/leave")
 async def group_leave(
     group_membership: Annotated[
         GroupMembership, Depends(dependecy.get_current_active_group_membership)
     ]
 ):
+    if group_membership.leader:
+        raise HTTPException(status_code=400, detail="Leader cannot leave group")
+    
     await group_membership.update_from_dict({"accepted": False, "rejected": True})
     await group_membership.save()
 
