@@ -45,6 +45,7 @@ class EditOrganizationBodySpec(BaseModel):
     description: Optional[Annotated[str, Field(max_length=512)]] = None
     students_password: Optional[Annotated[str, Field(max_length=32)]] = None
     teachers_password: Optional[Annotated[str, Field(max_length=32)]] = None
+    supervisor_password: Optional[Annotated[str, Field(max_length=32)]] = None
     areas: Optional[Annotated[list[str], Field(max_length=10)]] = None
 
 

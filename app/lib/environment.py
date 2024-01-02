@@ -12,6 +12,7 @@ class EnvNotFoundError(Exception):
 sys.path.append("app")
 dotenv.load_dotenv()
 
+
 def get(env: str, type: type = str) -> str:
     value = os.environ.get(env)
     if value is None:

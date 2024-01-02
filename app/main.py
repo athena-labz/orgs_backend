@@ -265,13 +265,18 @@ async def organization_edit(
     body: specs.EditOrganizationBodySpec,
     organization_identifier: str,
 ):
-    organization = await Organization.filter(identifier=organization_identifier).first()
+    organization = (
+        await Organization.filter(identifier=organization_identifier)
+        .prefetch_related("admin")
+        .first()
+    )
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
 
     if organization.admin != current_user:
         raise HTTPException(
-            status_code=400, detail="User does not have permission to edit organization"
+            status_code=400,
+            detail=f"User does not have permission to edit organization! Contact {organization.admin.email}!",
         )
 
     update_dict = {}
@@ -320,7 +325,21 @@ async def organization_join(
             status_code=400, detail="Organizer cannot join any organizations"
         )
 
-    if body.area is not None and body.area.lower() not in organization.areas:
+    # If is student and organization has at least one area
+    # Enforce that student chose an area
+    if (
+        (current_user.type == UserType.STUDENT.value)
+        and (len(organization.areas) > 0)
+        and (body.area is None)
+    ):
+        raise HTTPException(status_code=400, detail="No area selected")
+
+    if (current_user.type != UserType.STUDENT.value) and (body.area is not None):
+        raise HTTPException(status_code=400, detail="Only student can select area")
+
+    if body.area is not None and body.area.lower() not in [
+        area.lower() for area in organization.areas
+    ]:
         raise HTTPException(
             status_code=400, detail="Area selected does not exist in this organization"
         )
