@@ -95,6 +95,10 @@ class ReviewTaskBodySpec(BaseModel):
     extended_deadline: Optional[datetime.datetime] = None
 
 
+class FundTaskBodySpec(BaseModel):
+    amount: int
+
+
 class ListResponse(BaseModel):
     current_page: int
     max_page: int

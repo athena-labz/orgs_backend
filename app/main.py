@@ -16,11 +16,12 @@ from app.model import (
     Group,
     GroupMembership,
     Task,
+    TaskFund,
     TaskReward,
     TaskAction,
 )
 
-from app.lib import cardano, auth, environment, utils, group
+from app.lib import balance, cardano, auth, environment, utils, group
 
 import dependecy
 import specs
@@ -239,27 +240,17 @@ async def user_balance_read(
         OrganizationMembership, Depends(dependecy.get_current_user_membership)
     ]
 ):
-    owed_balances = await UserBalance.filter(
-        Q(user_member=current_membership) & Q(is_claimed=False)
-    ).all()
+    owed_balance = await balance.get_user_owed_balance(current_membership)
+    claimed_balance = await balance.get_user_claimed_balance(current_membership)
 
-    owed_balance = 0
-    for balance in owed_balances:
-        owed_balance += balance.amount
-
-    claimed_balances = (
+    last_claim_date = (
         await UserBalance.filter(Q(user_member=current_membership) & Q(is_claimed=True))
         .order_by("-claim_date")
-        .all()
+        .first()
     )
 
-    last_claim_date = None
-    if len(claimed_balances) > 0:
-        last_claim_date = claimed_balances[0].claim_date.isoformat()
-
-    claimed_balance = 0
-    for balance in claimed_balances:
-        claimed_balance += balance.amount
+    if last_claim_date is not None:
+        last_claim_date = last_claim_date.claim_date.isoformat()
 
     return specs.BalanceResponse(
         owed=owed_balance, claimed=claimed_balance, last_claim_date=last_claim_date
@@ -750,6 +741,7 @@ async def individual_task_create(
         description=body.description,
         deadline=body.deadline,
         is_individual=True,
+        owner_membership=current_membership,
     )
 
     pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
@@ -973,6 +965,66 @@ async def task_submission_review(
     return {"message": "Successfully asked for a task resubmission"}
 
 
+@app.post("/organization/{organization_identifier}/task/{task_identifier}/fund")
+async def task_fund(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    task: Annotated[Task, Depends(dependecy.get_individual_task)],
+    body: specs.FundTaskBodySpec,
+):
+    if not task.is_approved_start:
+        raise HTTPException(
+            status_code=400, detail="Task has not been approved by a teacher yet"
+        )
+
+    if task.is_rejected_completed or task.is_approved_completed:
+        raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    if task.is_individual == False:
+        raise HTTPException(status_code=400, detail="Task must be individual to fund")
+
+    # Make sure user has balance
+    user_balance = await balance.get_user_available_balance(current_membership)
+    if user_balance < body.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"User does not have enough balance. Has {user_balance} tokens in wallet.",
+        )
+
+    # Check if there exists a task fund from this user to this task already
+    existing_task_fund = await TaskFund.filter(
+        Q(user_member=current_membership) & Q(task=task)
+    ).first()
+    if existing_task_fund is not None:
+        raise HTTPException(
+            status_code=400, detail=f"User has already funded this task"
+        )
+
+    task_fund = await TaskFund.create(
+        amount=body.amount, user_member=current_membership, task=task
+    )
+
+    collected_balances, _ = await balance.collect_amount(
+        current_membership, body.amount
+    )
+
+    for collected_balance in collected_balances:
+        collected_balance.is_escrowed = True
+        collected_balance.escrow_task_fund = task_fund
+        await collected_balance.save()
+
+    task_action = TaskAction(
+        name="Task funded",
+        description=f"Task funded with {body.amount} tokens. Funds will be available upon completion.",
+        author=current_membership.user,
+        task=task,
+    )
+    await task_action.save()
+
+    return {"message": "Successfully funded task"}
+
+
 @app.get(
     "/organization/{organization_identifier}/task/{task_identifier}",
     response_model=specs.TaskSpec,
@@ -987,7 +1039,7 @@ async def task_read(task: Annotated[Task, Depends(dependecy.get_task)]):
     "/organization/{organization_identifier}/task/{task_identifier}/members",
     response_model=list[specs.UserSpec],
 )
-async def task_members_read(task: Annotated[Task, Depends(dependecy.get_task)]):
+async def task_members_read(task: Annotated[Task, Depends(dependecy.get_group_task)]):
     members = (
         await GroupMembership.filter(Q(group=task.group) & Q(accepted=True))
         .prefetch_related("user")

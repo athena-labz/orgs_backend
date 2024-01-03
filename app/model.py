@@ -143,10 +143,20 @@ class Task(models.Model):
 
     is_individual = fields.BooleanField(default=False)
 
-    # Only if is not individual
+    # Only if it is not individual
     group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
-        model_name="models.Group", related_name="tasks", index=True, null=True
+        model_name="models.Group", related_name="group_tasks", index=True, null=True
     )  # Participants of the task
+
+    # Only if it is individual
+    owner_membership: fields.ForeignKeyRelation[
+        "OrganizationMembership"
+    ] = fields.ForeignKeyField(
+        model_name="models.OrganizationMembership",
+        related_name="individual_tasks",
+        index=True,
+        null=True,
+    )
 
     is_approved_start = fields.BooleanField(default=False)  # By teacher
     is_rejected_start = fields.BooleanField(default=False)
@@ -169,6 +179,7 @@ class TaskReward(models.Model):
     id = fields.IntField(pk=True)
 
     reward = fields.BigIntField()
+    is_completed = fields.BooleanField(default=False)
 
     group_member: fields.ForeignKeyRelation["GroupMembership"] = fields.ForeignKeyField(
         model_name="models.GroupMembership", related_name="task_rewards"
@@ -177,18 +188,25 @@ class TaskReward(models.Model):
         model_name="models.Task", related_name="rewards"
     )
 
+    complete_date = fields.DatetimeField(null=True)
+
 
 class TaskFund(models.Model):
     id = fields.IntField(pk=True)
 
     amount = fields.BigIntField()
+    is_completed = fields.BooleanField(default=False)
 
-    user_member: fields.ForeignKeyRelation["GroupMembership"] = fields.ForeignKeyField(
-        model_name="models.GroupMembership", related_name="task_funds"
+    user_member: fields.ForeignKeyRelation[
+        "OrganizationMembership"
+    ] = fields.ForeignKeyField(
+        model_name="models.OrganizationMembership", related_name="task_funds"
     )
     task: fields.ForeignKeyRelation["Task"] = fields.ForeignKeyField(
         model_name="models.Task", related_name="funds"
     )
+
+    complete_date = fields.DatetimeField(null=True)
 
 
 class TaskAction(models.Model):
@@ -223,6 +241,14 @@ class UserBalance(models.Model):
     amount = fields.BigIntField()
 
     is_claimed = fields.BooleanField(default=False)
+
+    is_escrowed = fields.BooleanField(default=False)
+    escrow_task_fund: fields.ForeignKeyRelation["TaskFund"] = fields.ForeignKeyField(
+        model_name="models.TaskFund", related_name="escrowed_balances", null=True
+    )
+
+    is_error = fields.BooleanField(default=False)
+    claim_error = fields.TextField(null=True)
 
     user_member: fields.ForeignKeyRelation[
         "OrganizationMembership"

@@ -45,11 +45,11 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         token_data = specs.TokenDataSpec(username=username)
     except JWTError as e:
         raise credentials_exception
-    
+
     user = await User.filter(stake_address=token_data.username).first()
     if user is None:
         raise credentials_exception
-    
+
     return user
 
 
@@ -58,7 +58,7 @@ async def get_current_active_user(
 ):
     if not current_user.active:
         raise HTTPException(status_code=400, detail="Inactive user")
-    
+
     return current_user
 
 
@@ -69,13 +69,10 @@ async def get_current_user_membership(
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=400, detail="Organization does not exist")
-    
-    organization_membership = (
-        await OrganizationMembership.filter(
-            Q(user=current_user) & Q(organization=organization)
-        )
-        .first()
-    )
+
+    organization_membership = await OrganizationMembership.filter(
+        Q(user=current_user) & Q(organization=organization)
+    ).first()
 
     if organization_membership is None:
         raise HTTPException(
@@ -99,7 +96,7 @@ async def get_current_group_membership(
     ).first()
     if group is None:
         raise HTTPException(status_code=400, detail="Group does not exist")
-    
+
     group_membership = (
         await GroupMembership.filter(Q(user=current_membership.user) & Q(group=group))
         .prefetch_related("group")
@@ -109,7 +106,7 @@ async def get_current_group_membership(
         raise HTTPException(
             status_code=400, detail="User has no membership with this group"
         )
-    
+
     return group_membership
 
 
@@ -137,10 +134,49 @@ async def get_current_active_group_membership(
 
 
 async def get_task(organization_identifier: str, task_identifier: str):
-    task = await Task.filter(
-        Q(identifier=task_identifier)
-        & Q(group__organization__identifier=organization_identifier)
-    ).prefetch_related("group").first()
+    task = (
+        await Task.filter(
+            Q(identifier=task_identifier)
+            & Q(
+                Q(owner_membership__organization__identifier=organization_identifier)
+                | Q(group__organization__identifier=organization_identifier)
+            )
+        )
+        .prefetch_related("owner_membership", "group")
+        .first()
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task
+
+
+async def get_individual_task(organization_identifier: str, task_identifier: str):
+    task = (
+        await Task.filter(
+            Q(identifier=task_identifier)
+            & Q(owner_membership__organization__identifier=organization_identifier)
+            & Q(is_individual=True)
+        )
+        .prefetch_related("owner_membership")
+        .first()
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task
+
+
+async def get_group_task(organization_identifier: str, task_identifier: str):
+    task = (
+        await Task.filter(
+            Q(identifier=task_identifier)
+            & Q(group__organization__identifier=organization_identifier)
+            & Q(is_individual=False)
+        )
+        .prefetch_related("group")
+        .first()
+    )
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
 
