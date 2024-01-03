@@ -1,0 +1,6 @@
+*.lock
+__pycache__
+.vscode
+.env
+*.sqlite3
+.pytest_cache
