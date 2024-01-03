@@ -9,6 +9,7 @@ from tortoise.expressions import Q
 
 from app.model import (
     User,
+    UserBalance,
     UserType,
     Organization,
     OrganizationMembership,
@@ -226,6 +227,42 @@ async def user_tasks_read(
 
     return specs.TasksResponse(
         current_page=page, max_page=max_page, tasks=pydantic_tasks
+    )
+
+
+@app.get(
+    "/users/me/organization/{organization_identifier}/balance",
+    response_model=specs.BalanceResponse,
+)
+async def user_balance_read(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ]
+):
+    owed_balances = await UserBalance.filter(
+        Q(user_member=current_membership) & Q(is_claimed=False)
+    ).all()
+
+    owed_balance = 0
+    for balance in owed_balances:
+        owed_balance += balance.amount
+
+    claimed_balances = (
+        await UserBalance.filter(Q(user_member=current_membership) & Q(is_claimed=True))
+        .order_by("-claim_date")
+        .all()
+    )
+
+    last_claim_date = None
+    if len(claimed_balances) > 0:
+        last_claim_date = claimed_balances[0].claim_date.isoformat()
+
+    claimed_balance = 0
+    for balance in claimed_balances:
+        claimed_balance += balance.amount
+
+    return specs.BalanceResponse(
+        owed=owed_balance, claimed=claimed_balance, last_claim_date=last_claim_date
     )
 
 

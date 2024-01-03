@@ -986,3 +986,15 @@ async def test_task_submission_review():
         headers={"Authorization": "Bearer " + student_token},
     )
     assert response.status_code == 400
+
+
+@freeze_time("2023-12-27 15:00:00")
+async def test_task_fund():
+    test_identifier = "test_task_fund"
+    test_name = " ".join([word.capitalize() for word in test_identifier.split("_")])
+
+    client = TestClient(app)
+
+    # Make sure only works with individual tasks
+
+    assert False

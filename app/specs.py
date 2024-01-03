@@ -122,3 +122,9 @@ class GroupMembershipExtendedSpec(GroupMembershipSpec):
 
 class OrganizationGroupsResponse(ListResponse):
     groups: list[GroupMembershipExtendedSpec]
+
+
+class BalanceResponse(BaseModel):
+    owed: int
+    claimed: int
+    last_claim_date: Optional[datetime.datetime]

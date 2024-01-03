@@ -178,6 +178,19 @@ class TaskReward(models.Model):
     )
 
 
+class TaskFund(models.Model):
+    id = fields.IntField(pk=True)
+
+    amount = fields.BigIntField()
+
+    user_member: fields.ForeignKeyRelation["GroupMembership"] = fields.ForeignKeyField(
+        model_name="models.GroupMembership", related_name="task_funds"
+    )
+    task: fields.ForeignKeyRelation["Task"] = fields.ForeignKeyField(
+        model_name="models.Task", related_name="funds"
+    )
+
+
 class TaskAction(models.Model):
     id = fields.IntField(pk=True)
 
@@ -201,3 +214,21 @@ class TaskAction(models.Model):
 
 
 TaskActionSpec = pydantic_model_creator(TaskAction, name="TaskAction")
+
+
+class UserBalance(models.Model):
+    id = fields.IntField(pk=True)
+
+    # The amount of tokens which is owed to a user
+    amount = fields.BigIntField()
+
+    is_claimed = fields.BooleanField(default=False)
+
+    user_member: fields.ForeignKeyRelation[
+        "OrganizationMembership"
+    ] = fields.ForeignKeyField(
+        model_name="models.OrganizationMembership", related_name="user_funds"
+    )
+
+    balance_date = fields.DatetimeField(default=datetime.datetime.utcnow)
+    claim_date = fields.DatetimeField(null=True)
