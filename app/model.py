@@ -139,8 +139,11 @@ class Task(models.Model):
     description = fields.CharField(max_length=1024)
     deadline = fields.DatetimeField()
 
+    is_individual = fields.BooleanField(default=False)
+
+    # Only if is not individual
     group: fields.ForeignKeyRelation["Group"] = fields.ForeignKeyField(
-        model_name="models.Group", related_name="tasks", index=True
+        model_name="models.Group", related_name="tasks", index=True, null=True
     )  # Participants of the task
 
     is_approved_start = fields.BooleanField(default=False)  # By teacher
@@ -196,4 +199,3 @@ class TaskAction(models.Model):
 
 
 TaskActionSpec = pydantic_model_creator(TaskAction, name="TaskAction")
-

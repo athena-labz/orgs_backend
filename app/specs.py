@@ -70,6 +70,13 @@ class CreateTaskBodySpec(BaseModel):
     deadline: datetime.datetime
 
 
+class CreateIndividualTaskBodySpec(BaseModel):
+    identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
+    name: Annotated[str, Field(max_length=128)]
+    description: Annotated[str, Field(max_length=1024)]
+    deadline: datetime.datetime
+
+
 class SubmitTaskBodySpec(BaseModel):
     name: Annotated[str, Field(max_length=128)]
     description: Annotated[str, Field(max_length=1024)]

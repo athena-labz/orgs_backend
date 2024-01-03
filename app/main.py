@@ -557,7 +557,7 @@ async def group_leave(
 ):
     if group_membership.leader:
         raise HTTPException(status_code=400, detail="Leader cannot leave group")
-    
+
     await group_membership.update_from_dict({"accepted": False, "rejected": True})
     await group_membership.save()
 
@@ -617,10 +617,43 @@ async def group_task_create(
         description=body.description,
         deadline=body.deadline,
         group=group_membership.group,
+        is_individual=False,
     )
 
     for reward, member in rewards.values():
         await TaskReward.create(group_member=member, task=task, reward=reward)
+
+    pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
+
+    return pydantic_task
+
+
+@app.post(
+    "/organization/{organization_identifier}/task/create",
+    response_model=specs.TaskSpec,
+)
+async def individual_task_create(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    body: specs.CreateIndividualTaskBodySpec,
+):
+    # Make sure there is no other task with this identifier in this
+    # organization
+    existing_task = await Task.filter(
+        Q(identifier=body.identifier)
+        & Q(group__organization=current_membership.organization)
+    ).first()
+    if existing_task is not None:
+        raise HTTPException(status_code=400, detail="Task identifier taken")
+
+    task = await Task.create(
+        identifier=body.identifier,
+        name=body.name,
+        description=body.description,
+        deadline=body.deadline,
+        is_individual=True,
+    )
 
     pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
 

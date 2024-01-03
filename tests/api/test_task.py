@@ -14,8 +14,8 @@ from app.model import (
 import datetime
 
 @freeze_time("2023-12-27 15:00:00")
-async def test_task_create():
-    test_identifier = "test_task_create"
+async def test_group_task_create():
+    test_identifier = "test_group_task_create"
     test_name = " ".join([word.capitalize() for word in test_identifier.split("_")])
 
     client = TestClient(app)
@@ -69,13 +69,71 @@ async def test_task_create():
             "identifier": f"{test_identifier}_task_1",
             "name": f"{test_name} Task 1",
             "description": "",
-            "rewards": {"test_task_create@email.com": 200},
+            "rewards": {f"{test_identifier}@email.com": 200},
             "deadline": "2024-01-01T00:00:00Z",
         },
         headers={"Authorization": "Bearer " + token},
     )
 
     assert response.status_code == 200
+
+
+@freeze_time("2023-12-27 15:00:00")
+async def test_individual_task_create():
+    test_identifier = "test_individual_task_create"
+    test_name = " ".join([word.capitalize() for word in test_identifier.split("_")])
+
+    client = TestClient(app)
+
+    stake_address = "stake1u88jffq736p8u2fkwwfy9x4rvc2sajvexhw4fje028mj9ycn5gam5"
+    signature = "a40101032720062158201de17b6a9bb2f055635d54ba26b3f38dbc573a3bbbfc494d0e0ac9e24fa3aa96H1+DFJCghAmokzYG84582aa201276761646472657373581de1cf24a41e8e827e29367392429aa366150ec99935dd54cb2f51f72293a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d3137303336383932303058405bb2ee98935ddf1c38dbcbea9779bc4e1b587ebfb59b1973d7e940d4796d603403b8047d86edf27a171b199a78dc37289ff3608921e7ce0f601c147a615d310a"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1ODhqZmZxNzM2cDh1MmZrd3dmeTl4NHJ2YzJzYWp2ZXhodzRmamUwMjhtajl5Y241Z2FtNSIsImV4cCI6NjE3MDM2ODkyMDB9.4iWQp89dYCN8qY0EBHAIKFqXj2xj4mSk8mSHbslYWic"
+    
+    email = f"{test_identifier}@email.com"
+    created_user = await User.create(
+        type="organizer",
+        email=email,
+        stake_address=stake_address,
+        active=True,
+    )
+
+    created_organization = await Organization.create(
+        identifier=f"{test_identifier}_org_1",
+        name=f"{test_name} Org 1",
+        description="",
+        students_password="pass123",
+        teachers_password="pass123",
+        supervisor_password="pass123",
+        areas=[],
+        admin=created_user,
+    )
+
+    await OrganizationMembership.create(
+        user=created_user,
+        organization=created_organization,
+        area=None,
+    )
+
+    response = client.post(
+        f"/organization/{test_identifier}_org_1/task/create",
+        json={
+            "identifier": f"{test_identifier}_task_1",
+            "name": f"{test_name} Task 1",
+            "description": "...description...",
+            "deadline": "2024-01-01T00:00:00Z",
+        },
+        headers={"Authorization": "Bearer " + token},
+    )
+
+    assert response.status_code == 200
+
+    task = await Task.filter(identifier=f"{test_identifier}_task_1").first()
+
+    assert task.identifier == f"{test_identifier}_task_1"
+    assert task.name == f"{test_name} Task 1"
+    assert task.description == "...description..."
+    assert task.deadline.timestamp() == datetime.datetime(2024, 1, 1).timestamp()
+    assert task.is_individual == True
 
 
 @freeze_time("2023-12-27 15:00:00")
