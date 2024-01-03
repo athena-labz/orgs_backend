@@ -1111,4 +1111,4 @@ async def task_actions_read(
     )
 
 
-register_tortoise(app, db_url=DATABASE, modules={"models": ["model"]})
+register_tortoise(app, db_url=DATABASE, modules={"models": ["app.model"]})

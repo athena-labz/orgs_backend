@@ -7,7 +7,7 @@ DATABASE = environment.get("DATABASE")
 async def init():
     await Tortoise.init(
         db_url=DATABASE,
-        modules={'models': ['model']}
+        modules={'models': ['app.model']}
     )
 
     # Generate the schema

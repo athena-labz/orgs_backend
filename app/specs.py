@@ -7,7 +7,7 @@ from app.model import (
     GroupSpec,
     GroupMembershipSpec,
     TaskSpec,
-    TaskActionSpec
+    TaskActionSpec,
 )
 
 import datetime
@@ -61,9 +61,7 @@ class JoinOrganizationBodySpec(BaseModel):
 class CreateGroupBodySpec(BaseModel):
     identifier: Annotated[str, Field(max_length=64, pattern=r"^[a-zA-Z0-9_-]{1,50}$")]
     name: Annotated[str, Field(max_length=128)]
-    members: Annotated[
-        list[str], Field(max_length=4, min_length=1)
-    ]  # list of emails
+    members: list[str]  # list of emails
 
 
 class CreateTaskBodySpec(BaseModel):
