@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN payment_address VARCHAR NULLABLE;

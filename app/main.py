@@ -59,7 +59,7 @@ async def health():
 
 
 @app.post("/token", response_model=specs.TokenSpec)
-async def login_for_access_token(
+async def user_login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ):
     user = await auth.authenticate_user(form_data.username, form_data.password)
@@ -76,6 +76,82 @@ async def login_for_access_token(
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/users/register", response_model=specs.UserSpec)
+async def user_register(body: specs.RegisterBodySpec):
+    try:
+        address = pyc.Address.from_primitive(body.stake_address)
+    except Exception as e:
+        logging.error(f"Error while trying to convert stake address {e}")
+        raise HTTPException(status_code=400, detail="Invalid stake address format")
+
+    if address.network != pyc.Network.MAINNET:
+        raise HTTPException(
+            status_code=400,
+            detail="Stake address is from preprod, but it must be from mainnet",
+        )
+
+    if not cardano.verify_signature(body.signature, body.stake_address):
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    user = await User.filter(
+        Q(stake_address=body.stake_address) | Q(email=body.email)
+    ).first()
+    if user is not None:
+        raise HTTPException(status_code=400, detail="Stake address or email taken")
+
+    user = await User.create(
+        type=body.user_type.value, email=body.email, stake_address=body.stake_address
+    )
+    pydantic_user = await specs.UserSpec.from_tortoise_orm(user)
+
+    return pydantic_user
+
+
+@app.post("/users/me/email/confirm")
+async def user_email_confirm(
+    email_validation_string: str,
+    current_user: Annotated[User, Depends(dependecy.get_current_user)],
+):
+    if current_user.active:
+        raise HTTPException(status_code=400, detail="Email already verified")
+
+    if email_validation_string != current_user.email_validation_string:
+        await current_user.update_from_dict(
+            {"email_validation_string": utils.string_generator()}
+        )
+        await current_user.save()
+
+        raise HTTPException(status_code=400, detail="Wrong email string")
+
+    await current_user.update_from_dict({"active": True})
+    await current_user.save()
+
+    return {"message": "Successfully confirmed the email"}
+
+
+@app.post("/users/me/address/add")
+async def user_add_payment_address(
+    current_user: Annotated[User, Depends(dependecy.get_current_active_user)],
+    body: specs.UserAddPaymentAddressBodySpec,
+):
+    # Make sure address is valid
+    try:
+        address = pyc.Address.from_primitive(body.address)
+
+        if address.network != cardano.current_network():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Address is not from current network {str(cardano.current_network())}",
+            )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid address")
+
+    await current_user.update_from_dict({"payment_address": body.address})
+    await current_user.save()
+
+    return {"message": "Successfully confirmed the email"}
 
 
 @app.get("/users/me", response_model=specs.UserSpec)
@@ -114,59 +190,6 @@ async def user_organizations_read(
     return specs.UserOrganizationsResponse(
         current_page=page, max_page=max_page, organizations=pydantic_organizations
     )
-
-
-@app.post("/users/register", response_model=specs.UserSpec)
-async def register(body: specs.RegisterBodySpec):
-    try:
-        address = pyc.Address.from_primitive(body.stake_address)
-    except Exception as e:
-        logging.error(f"Error while trying to convert stake address {e}")
-        raise HTTPException(status_code=400, detail="Invalid stake address format")
-
-    if address.network != pyc.Network.MAINNET:
-        raise HTTPException(
-            status_code=400,
-            detail="Stake address is from preprod, but it must be from mainnet",
-        )
-
-    if not cardano.verify_signature(body.signature, body.stake_address):
-        raise HTTPException(status_code=400, detail="Invalid signature")
-
-    user = await User.filter(
-        Q(stake_address=body.stake_address) | Q(email=body.email)
-    ).first()
-    if user is not None:
-        raise HTTPException(status_code=400, detail="Stake address or email taken")
-
-    user = await User.create(
-        type=body.user_type.value, email=body.email, stake_address=body.stake_address
-    )
-    pydantic_user = await specs.UserSpec.from_tortoise_orm(user)
-
-    return pydantic_user
-
-
-@app.post("/users/confirm/email")
-async def confirm_email(
-    email_validation_string: str,
-    current_user: Annotated[User, Depends(dependecy.get_current_user)],
-):
-    if current_user.active:
-        raise HTTPException(status_code=400, detail="Email already verified")
-
-    if email_validation_string != current_user.email_validation_string:
-        await current_user.update_from_dict(
-            {"email_validation_string": utils.string_generator()}
-        )
-        await current_user.save()
-
-        raise HTTPException(status_code=400, detail="Wrong email string")
-
-    await current_user.update_from_dict({"active": True})
-    await current_user.save()
-
-    return {"message": "Successfully confirmed the email"}
 
 
 @app.post("/organization/create", response_model=specs.OrganizationSpec)

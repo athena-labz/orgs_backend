@@ -30,6 +30,10 @@ class RegisterBodySpec(BaseModel):
     signature: str
 
 
+class UserAddPaymentAddressBodySpec(BaseModel):
+    address: str
+
+
 class CreateOrganizationBodySpec(BaseModel):
     identifier: Annotated[str, Field(max_length=64)]
     name: Annotated[str, Field(max_length=128)]

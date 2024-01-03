@@ -77,7 +77,7 @@ async def test_user_confirm_email():
     )
 
     response = client.post(
-        "/users/confirm/email",
+        "/users/me/email/confirm",
         headers={"Authorization": "Bearer " + token},
         params={"email_validation_string": "test123"},
     )
@@ -255,3 +255,37 @@ async def test_user_tasks_read():
             "is_rewards_claimed": False,
         }.items()
     )
+
+
+@freeze_time("2023-12-27 15:00:00")
+async def test_user_add_payment_address():
+    test_identifier = "test_user_add_payment_address"
+    test_name = " ".join([word.capitalize() for word in test_identifier.split("_")])
+
+    client = TestClient(app)
+
+    stake_address = "stake1u83pehgnhut7scn6n0pm3uzr7maxll4dn0y27m6lgmrlavgqq7dhl"
+    signature = "a4010103272006215820fe531877d83d4e0d9227ea009ea31979bdfc02055e95f7971870e71a4344a0e2H1+DFJCghAmokzYG84582aa201276761646472657373581de1e21cdd13bf17e8627a9bc3b8f043f6fa6ffead9bc8af6f5f46c7feb1a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840b50460e6d415e6251dd55d8a21c08c038df5534afee34748105f22080c3c6be9dbf3cb85b48baaa278d970b69a408b128a2af401435140ee2727a8d758df3b0b"
+    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1ODNwZWhnbmh1dDdzY242bjBwbTN1enI3bWF4bGw0ZG4weTI3bTZsZ21ybGF2Z3FxN2RobCIsImV4cCI6NjE3MDM2ODkyMDB9.bYnpGP5gPngcT2aFjxxXQSMJI4uTLGAc-42DFbulvzI"
+
+    email = f"{test_identifier}@email.com"
+    created_user = await User.create(
+        type="organizer",
+        email=email,
+        stake_address=stake_address,
+        active=True,
+    )
+
+    response = client.post(
+        "/users/me/address/add",
+        json={"address": "addr1vy9nwdp3p7tnnxwrz4ya8lcejr4nw6xndhc6k69xq3kaprg5jumfq"},
+        headers={"Authorization": "Bearer " + token},
+    )
+
+    assert response.status_code == 200
+
+    # Find user
+    user = await User.filter(stake_address=stake_address).first()
+
+    assert user is not None
+    assert user.payment_address == "addr1vy9nwdp3p7tnnxwrz4ya8lcejr4nw6xndhc6k69xq3kaprg5jumfq"

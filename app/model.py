@@ -24,6 +24,8 @@ class User(models.Model):
     stake_address = fields.CharField(max_length=128, unique=True, index=True)
     token = fields.CharField(max_length=256, null=True)
 
+    payment_address = fields.CharField(max_length=128, unique=False, null=True)
+
     # If the current user is active / verified
     # active = fields.BooleanField(default=False)
     active = fields.BooleanField(default=True)
