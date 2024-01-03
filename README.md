@@ -37,7 +37,7 @@ $ uvicorn main:app --reload
 ```
 
 ## Tortoise - ORM
-To initialize the database, (while at "app/") run:
+To initialize the database, run:
 ```python3
 $ python3 initialize_database.py
 ```

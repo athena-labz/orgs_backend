@@ -1124,6 +1124,18 @@ async def task_members_read(task: Annotated[Task, Depends(dependecy.get_group_ta
 
 
 @app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}/owner",
+    response_model=specs.UserSpec,
+)
+async def task_owner_read(task: Annotated[Task, Depends(dependecy.get_individual_task)]):
+    await task.fetch_related("owner_membership")
+    await task.owner_membership.fetch_related("user")
+
+    pydantic_user = await specs.UserSpec.from_tortoise_orm(task.owner_membership.user)
+    return pydantic_user
+
+
+@app.get(
     "/organization/{organization_identifier}/task/{task_identifier}/actions",
     response_model=specs.TaskActionsResponse,
 )
