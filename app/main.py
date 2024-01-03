@@ -192,6 +192,43 @@ async def user_organizations_read(
     )
 
 
+@app.get(
+    "/users/me/organization/{organization_identifier}/tasks",
+    response_model=specs.TasksResponse,
+)
+async def user_tasks_read(
+    current_membership: Annotated[
+        OrganizationMembership, Depends(dependecy.get_current_user_membership)
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    group_membership = await group.get_user_group_membership(current_membership)
+    if group_membership is None:
+        return specs.TasksResponse(current_page=1, max_page=1, tasks=[])
+
+    await group_membership.fetch_related("group")
+
+    # Page 1 must be from first element to count element
+    # Page 2 must be from count element to 2*count element
+    tasks = (
+        Task.filter(group=group_membership.group)
+        .order_by("-creation_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .all()
+    )
+
+    count_tasks = await Task.filter(group=group_membership.group).count()
+    max_page = (count_tasks // (count + 1)) + 1
+
+    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
+
+    return specs.TasksResponse(
+        current_page=page, max_page=max_page, tasks=pydantic_tasks
+    )
+
+
 @app.post("/organization/create", response_model=specs.OrganizationSpec)
 async def organization_create(
     current_user: Annotated[User, Depends(dependecy.get_current_active_user)],
@@ -222,61 +259,6 @@ async def organization_create(
     pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
 
     return pydantic_organization
-
-
-@app.get(
-    "/organization/{organization_identifier}", response_model=specs.OrganizationSpec
-)
-async def organization_read(organization_identifier: str):
-    organization = await Organization.filter(identifier=organization_identifier).first()
-    if organization is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
-
-    return pydantic_organization
-
-
-@app.get("/organization/{organization_identifier}/areas")
-async def organization_areas_read(organization_identifier: str):
-    organization = await Organization.filter(identifier=organization_identifier).first()
-    if organization is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    return organization.areas
-
-
-@app.get(
-    "/organization/{organization_identifier}/tasks",
-    response_model=specs.TasksResponse,
-)
-async def organization_tasks_read(
-    organization_identifier: str,
-    page: Annotated[int, Query(ge=1)] = 1,
-    count: Annotated[int, Query(ge=1, le=20)] = 10,
-):
-    organization = await Organization.filter(identifier=organization_identifier).first()
-    if organization is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    # Page 1 must be from first element to count element
-    # Page 2 must be from count element to 2*count element
-    tasks = (
-        Task.filter(group__organization=organization)
-        .order_by("-creation_date")
-        .offset((page - 1) * count)
-        .limit(count)
-        .all()
-    )
-
-    count_tasks = await Task.filter(group__organization=organization).count()
-    max_page = (count_tasks // (count + 1)) + 1
-
-    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
-
-    return specs.TasksResponse(
-        current_page=page, max_page=max_page, tasks=pydantic_tasks
-    )
 
 
 @app.post(
@@ -374,6 +356,61 @@ async def organization_join(
     )
 
     return {"message": f"Successfully joined {organization_identifier}"}
+
+
+@app.get(
+    "/organization/{organization_identifier}", response_model=specs.OrganizationSpec
+)
+async def organization_read(organization_identifier: str):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    pydantic_organization = await specs.OrganizationSpec.from_tortoise_orm(organization)
+
+    return pydantic_organization
+
+
+@app.get("/organization/{organization_identifier}/areas")
+async def organization_areas_read(organization_identifier: str):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return organization.areas
+
+
+@app.get(
+    "/organization/{organization_identifier}/tasks",
+    response_model=specs.TasksResponse,
+)
+async def organization_tasks_read(
+    organization_identifier: str,
+    page: Annotated[int, Query(ge=1)] = 1,
+    count: Annotated[int, Query(ge=1, le=20)] = 10,
+):
+    organization = await Organization.filter(identifier=organization_identifier).first()
+    if organization is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Page 1 must be from first element to count element
+    # Page 2 must be from count element to 2*count element
+    tasks = (
+        Task.filter(group__organization=organization)
+        .order_by("-creation_date")
+        .offset((page - 1) * count)
+        .limit(count)
+        .all()
+    )
+
+    count_tasks = await Task.filter(group__organization=organization).count()
+    max_page = (count_tasks // (count + 1)) + 1
+
+    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
+
+    return specs.TasksResponse(
+        current_page=page, max_page=max_page, tasks=pydantic_tasks
+    )
 
 
 @app.get(
@@ -683,61 +720,6 @@ async def individual_task_create(
     return pydantic_task
 
 
-@app.get(
-    "/organization/{organization_identifier}/task/{task_identifier}",
-    response_model=specs.TaskSpec,
-)
-async def task_read(task: Annotated[Task, Depends(dependecy.get_task)]):
-    pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
-
-    return pydantic_task
-
-
-@app.get(
-    "/organization/{organization_identifier}/task/{task_identifier}/members",
-    response_model=list[specs.UserSpec],
-)
-async def task_members_read(task: Annotated[Task, Depends(dependecy.get_task)]):
-    members = (
-        await GroupMembership.filter(Q(group=task.group) & Q(accepted=True))
-        .prefetch_related("user")
-        .all()
-    )
-
-    users = []
-    for member in members:
-        users.append(await specs.UserSpec.from_tortoise_orm(member.user))
-
-    return users
-
-
-@app.get(
-    "/organization/{organization_identifier}/task/{task_identifier}/actions",
-    response_model=specs.TaskActionsResponse,
-)
-async def task_actions_read(
-    task: Annotated[Task, Depends(dependecy.get_task)],
-    page: Annotated[int, Query(ge=1)] = 1,
-    count: Annotated[int, Query(ge=1, le=20)] = 10,
-):
-    task_actions = (
-        TaskAction.filter(task=task)
-        .order_by("-action_date")
-        .offset((page - 1) * count)
-        .limit(count)
-        .all()
-    )
-
-    count_tasks = await TaskAction.filter(task=task).count()
-    max_page = (count_tasks // (count + 1)) + 1
-
-    pydantic_actions = await specs.TaskActionSpec.from_queryset(task_actions)
-
-    return specs.TaskActionsResponse(
-        current_page=page, max_page=max_page, actions=pydantic_actions
-    )
-
-
 @app.post(
     "/organization/{organization_identifier}/task/{task_identifier}/start/approve"
 )
@@ -955,39 +937,57 @@ async def task_submission_review(
 
 
 @app.get(
-    "/users/me/organization/{organization_identifier}/tasks",
-    response_model=specs.TasksResponse,
+    "/organization/{organization_identifier}/task/{task_identifier}",
+    response_model=specs.TaskSpec,
 )
-async def user_tasks_read(
-    current_membership: Annotated[
-        OrganizationMembership, Depends(dependecy.get_current_user_membership)
-    ],
+async def task_read(task: Annotated[Task, Depends(dependecy.get_task)]):
+    pydantic_task = await specs.TaskSpec.from_tortoise_orm(task)
+
+    return pydantic_task
+
+
+@app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}/members",
+    response_model=list[specs.UserSpec],
+)
+async def task_members_read(task: Annotated[Task, Depends(dependecy.get_task)]):
+    members = (
+        await GroupMembership.filter(Q(group=task.group) & Q(accepted=True))
+        .prefetch_related("user")
+        .all()
+    )
+
+    users = []
+    for member in members:
+        users.append(await specs.UserSpec.from_tortoise_orm(member.user))
+
+    return users
+
+
+@app.get(
+    "/organization/{organization_identifier}/task/{task_identifier}/actions",
+    response_model=specs.TaskActionsResponse,
+)
+async def task_actions_read(
+    task: Annotated[Task, Depends(dependecy.get_task)],
     page: Annotated[int, Query(ge=1)] = 1,
     count: Annotated[int, Query(ge=1, le=20)] = 10,
 ):
-    group_membership = await group.get_user_group_membership(current_membership)
-    if group_membership is None:
-        return specs.TasksResponse(current_page=1, max_page=1, tasks=[])
-
-    await group_membership.fetch_related("group")
-
-    # Page 1 must be from first element to count element
-    # Page 2 must be from count element to 2*count element
-    tasks = (
-        Task.filter(group=group_membership.group)
-        .order_by("-creation_date")
+    task_actions = (
+        TaskAction.filter(task=task)
+        .order_by("-action_date")
         .offset((page - 1) * count)
         .limit(count)
         .all()
     )
 
-    count_tasks = await Task.filter(group=group_membership.group).count()
+    count_tasks = await TaskAction.filter(task=task).count()
     max_page = (count_tasks // (count + 1)) + 1
 
-    pydantic_tasks = await specs.TaskSpec.from_queryset(tasks)
+    pydantic_actions = await specs.TaskActionSpec.from_queryset(task_actions)
 
-    return specs.TasksResponse(
-        current_page=page, max_page=max_page, tasks=pydantic_tasks
+    return specs.TaskActionsResponse(
+        current_page=page, max_page=max_page, actions=pydantic_actions
     )
 
 
