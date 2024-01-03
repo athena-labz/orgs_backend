@@ -476,7 +476,7 @@ async def test_organization_tasks_read():
         admin=created_user,
     )
 
-    await OrganizationMembership.create(
+    created_membership = await OrganizationMembership.create(
         user=created_user,
         organization=created_organization,
         area=None,
@@ -501,9 +501,91 @@ async def test_organization_tasks_read():
         description="",
         deadline=datetime.datetime(2024, 1, 1),
         group=created_group,
+        is_individual=False,
+    )
+
+    await Task.create(
+        identifier=f"{test_identifier}_task_2",
+        name=f"{test_name} Task 2",
+        description="",
+        deadline=datetime.datetime(2024, 1, 1),
+        owner_membership=created_membership,
+        is_individual=True,
     )
 
     response = client.get(f"/organization/{test_identifier}_org_1/tasks")
+
+    assert response.status_code == 200
+
+    assert response.json()["current_page"] == 1
+    assert response.json()["max_page"] == 1
+
+    assert isinstance(response.json()["tasks"], list)
+    assert len(response.json()["tasks"]) == 2
+
+    # print(response.json())
+    # assert False
+
+    assert (
+        response.json()["tasks"][0].items()
+        >= {
+            "identifier": "test_organization_tasks_read_task_2",
+            "name": "Test Organization Tasks Read Task 2",
+            "description": "",
+            "deadline": "2024-01-01T00:00:00Z",
+            "is_individual": True,
+            "is_approved_start": False,
+            "is_rejected_start": False,
+            "is_approved_completed": False,
+            "is_rejected_completed": False,
+            "is_rewards_claimed": False,
+        }.items()
+    )
+
+    assert (
+        response.json()["tasks"][1].items()
+        >= {
+            "identifier": "test_organization_tasks_read_task_1",
+            "name": "Test Organization Tasks Read Task 1",
+            "description": "",
+            "deadline": "2024-01-01T00:00:00Z",
+            "is_approved_start": False,
+            "is_rejected_start": False,
+            "is_approved_completed": False,
+            "is_rejected_completed": False,
+            "is_rewards_claimed": False,
+        }.items()
+    )
+
+    # Individual
+    response = client.get(f"/organization/{test_identifier}_org_1/tasks?individual=true")
+
+    assert response.status_code == 200
+
+    assert response.json()["current_page"] == 1
+    assert response.json()["max_page"] == 1
+
+    assert isinstance(response.json()["tasks"], list)
+    assert len(response.json()["tasks"]) == 1
+
+    assert (
+        response.json()["tasks"][0].items()
+        >= {
+            "identifier": "test_organization_tasks_read_task_2",
+            "name": "Test Organization Tasks Read Task 2",
+            "description": "",
+            "deadline": "2024-01-01T00:00:00Z",
+            "is_individual": True,
+            "is_approved_start": False,
+            "is_rejected_start": False,
+            "is_approved_completed": False,
+            "is_rejected_completed": False,
+            "is_rewards_claimed": False,
+        }.items()
+    )
+
+    # Group
+    response = client.get(f"/organization/{test_identifier}_org_1/tasks?group=true")
 
     assert response.status_code == 200
 
@@ -665,7 +747,7 @@ async def test_organization_groups_read():
         user=created_user,
         accepted=True,
         leader=True,
-        invite_date=datetime.datetime(2024, 1, 1)
+        invite_date=datetime.datetime(2024, 1, 1),
     )
 
     created_group_2 = await Group.create(
@@ -679,7 +761,7 @@ async def test_organization_groups_read():
         user=created_user,
         accepted=True,
         leader=True,
-        invite_date=datetime.datetime(2024, 1, 1)
+        invite_date=datetime.datetime(2024, 1, 1),
     )
 
     created_group_3 = await Group.create(
@@ -711,10 +793,13 @@ async def test_organization_groups_read():
     )
 
     assert "group" in response.json()["groups"][0]
-    assert response.json()["groups"][0]["group"].items() >= {
-        "identifier": "test_organization_groups_read_group_1",
-        "name": "Test Organization Groups Read Group 1",
-    }.items()
+    assert (
+        response.json()["groups"][0]["group"].items()
+        >= {
+            "identifier": "test_organization_groups_read_group_1",
+            "name": "Test Organization Groups Read Group 1",
+        }.items()
+    )
 
     assert (
         response.json()["groups"][1].items()
@@ -727,7 +812,10 @@ async def test_organization_groups_read():
     )
 
     assert "group" in response.json()["groups"][1]
-    assert response.json()["groups"][1]["group"].items() >= {
-        "identifier": "test_organization_groups_read_group_2",
-        "name": "Test Organization Groups Read Group 2",
-    }.items()
+    assert (
+        response.json()["groups"][1]["group"].items()
+        >= {
+            "identifier": "test_organization_groups_read_group_2",
+            "name": "Test Organization Groups Read Group 2",
+        }.items()
+    )

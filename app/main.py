@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
@@ -421,20 +421,59 @@ async def organization_tasks_read(
     organization_identifier: str,
     page: Annotated[int, Query(ge=1)] = 1,
     count: Annotated[int, Query(ge=1, le=20)] = 10,
+    individual: bool | None = None,
+    group: bool | None = None,
 ):
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
+    
+    if individual is None and group is None:
+        individual = True
+        group = True
+    elif individual is None:
+        individual = False
+    elif group is None:
+        group = False
 
-    # Page 1 must be from first element to count element
-    # Page 2 must be from count element to 2*count element
-    tasks = (
-        Task.filter(group__organization=organization)
-        .order_by("-creation_date")
-        .offset((page - 1) * count)
-        .limit(count)
-        .all()
-    )
+    tasks: List["Task"] = []
+
+    if individual and group:
+        # Page 1 must be from first element to count element
+        # Page 2 must be from count element to 2*count element
+        tasks = (
+            Task.filter(
+                Q(group__organization=organization)
+                | Q(owner_membership__organization=organization)
+            )
+            .order_by("-creation_date")
+            .offset((page - 1) * count)
+            .limit(count)
+            .all()
+        )
+    elif individual:
+        tasks = (
+            Task.filter(
+                Q(owner_membership__organization=organization) & Q(is_individual=True)
+            )
+            .order_by("-creation_date")
+            .offset((page - 1) * count)
+            .limit(count)
+            .all()
+        )
+    elif group:
+        tasks = (
+            Task.filter(Q(group__organization=organization) & Q(is_individual=False))
+            .order_by("-creation_date")
+            .offset((page - 1) * count)
+            .limit(count)
+            .all()
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="There are no tasks which are neither group or individual",
+        )
 
     count_tasks = await Task.filter(group__organization=organization).count()
     max_page = (count_tasks // (count + 1)) + 1
