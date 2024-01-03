@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 from freezegun import freeze_time
 
+from tortoise.expressions import Q
+
 from app.main import app
 from app.model import Organization, OrganizationMembership, User, Group, GroupMembership
 
@@ -210,7 +212,7 @@ async def test_group_accept():
     wrong_stake_address = "stake1u99whh0ngmjqukmv4yrdqcqly64vg4ujpjt8gfzcylvefhgy6xcjw"
     wrong_signature = "a40101032720062158208f8a9dfa91ef414386c614800f9c0e79183e137110e2ce2a723a5efefdeebe4cH1+DFJCghAmokzYG84582aa201276761646472657373581de14aebddf346e40e5b6ca906d0601f26aac457920c9674245827d994dda166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840fa89b3712335845c9469e904de89d1b88872f3f635449e74622d5e30afa1f3cd8b676c90205d76002587c2af7d723fd8ba8734de04289ab3134868a7f6b4a00e"
     wrong_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1OTl3aGgwbmdtanF1a212NHlyZHFjcWx5NjR2ZzR1anBqdDhnZnpjeWx2ZWZoZ3k2eGNqdyIsImV4cCI6NjE3MDM2ODkyMDB9.-1oPR8bJWZAByyeFM59pL_YS7GYAnl8cWwcBiICMvH4"
-    
+
     wrong_email = f"{test_identifier}_wrong@email.com"
     wrong_user = await User.create(
         type="student",
@@ -292,8 +294,10 @@ async def test_group_accept():
     )
 
     assert response.status_code == 200
-    
-    membership = await GroupMembership.filter(group=created_group, user=other_user).first()
+
+    membership = await GroupMembership.filter(
+        Q(group=created_group) & Q(user=other_user)
+    ).first()
     assert membership is not None
     assert membership.accepted == True
 
@@ -308,7 +312,7 @@ async def test_group_reject():
     stake_address = "stake1u9lfp58xahvkr66esqtsru93k9jv8h4zacdfk9r633xnm9gyg932c"
     signature = "a40101032720062158202d1830da8a2d2deb6596ed5118ce784db39aada63e652326a06a176a54d45738H1+DFJCghAmokzYG84582aa201276761646472657373581de17e90d0e6edd961eb59801701f0b1b164c3dea2ee1a9b147a8c4d3d95a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840d34c7d25a1d5ffc93251984c9852433d084b459ef8f5a2ec169f50653d0bf3d33f736f0c6ef61b807987ee382fa7968b27110e7d14a006183bfb8b85ea063c07"
     token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1OWxmcDU4eGFodmtyNjZlc3F0c3J1OTNrOWp2OGg0emFjZGZrOXI2MzN4bm05Z3lnOTMyYyIsImV4cCI6NjE3MDM2ODkyMDB9.i6jDkcNURiEHdmo-Ff_H2FmUm-mqPDjW4hmgCv3CHPk"
-    
+
     email = f"{test_identifier}@email.com"
     created_user = await User.create(
         type="organizer",
@@ -320,7 +324,7 @@ async def test_group_reject():
     other_stake_address = "stake1uxu5xar3epakr9sry53j7d68qvx27d9cc5dawr94947y08c5yx45x"
     other_signature = "a40101032720062158208bb76bd7f16da83e22dfd814fa3477f83bc612723bf7338d0934a4c0104ad5caH1+DFJCghAmokzYG84582aa201276761646472657373581de1b9437471c87b61960325232f3747030caf34b8c51bd70cb52d7c479fa166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d3137303336383932303058402441860f9c9714e34748234e0f908a3c94f33e4b6a028ffb703305b0ae15b41f757d671767890ba405d6c1a1ad46c9a1fbe82249cb1a6659e08dc9a251c13c08"
     other_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eHU1eGFyM2VwYWtyOXNyeTUzajdkNjhxdngyN2Q5Y2M1ZGF3cjk0OTQ3eTA4YzV5eDQ1eCIsImV4cCI6NjE3MDM2ODkyMDB9.5iMjzDNu7fUnV5VrZjJdrqLUBo8n5TSWAkqIc-JSboc"
-    
+
     other_email = f"{test_identifier}_other@email.com"
     other_user = await User.create(
         type="student",
@@ -388,8 +392,10 @@ async def test_group_reject():
     )
 
     assert response.status_code == 200
-    
-    membership = await GroupMembership.filter(group=created_group, user=other_user).first()
+
+    membership = await GroupMembership.filter(
+        Q(group=created_group) & Q(user=other_user)
+    ).first()
     assert membership is not None
     assert membership.rejected == True
 
@@ -404,7 +410,7 @@ async def test_group_leave():
     stake_address = "stake1uytd6lp88q3753xwe509ml2c49gyrnk26as9hx38xlcs2lgk60awl"
     signature = "a40101032720062158209a239908e601ee9d4dc9d91c07dae32b4037545417b0617db94f025629fd0233H1+DFJCghAmokzYG84582aa201276761646472657373581de116dd7c273823ea44cecd1e5dfd58a95041cecad7605b9a2737f1057da166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840df36bc4ee32fc56dc2dec4e29f82891bc4c8332dbfdeade3348ae9f7cdee8165e61f46be6c471d2d2a1833c4acae1fdef17e642453fc25bd415ca42e09da980a"
     token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eXRkNmxwODhxMzc1M3h3ZTUwOW1sMmM0OWd5cm5rMjZhczloeDM4eGxjczJsZ2s2MGF3bCIsImV4cCI6NjE3MDM2ODkyMDB9.X2paHb30FjtIRavNCM72TC5NPZnqUFyNIUZDZnXDcPs"
-    
+
     email = f"{test_identifier}@email.com"
     created_user = await User.create(
         type="organizer",
@@ -416,7 +422,7 @@ async def test_group_leave():
     other_stake_address = "stake1u94hrz3py6ku0vyygwr3prquard5xgwka6zy39ln90m0slgq33ffy"
     other_signature = "a40101032720062158202cdce64819bb90c34838576791e899f9252e76753a422ad88a44a6a0820be5b1H1+DFJCghAmokzYG84582aa201276761646472657373581de16b718a2126adc7b0844387108c1ce8db4321d6ee844897f32bf6f87da166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840b81b71e2ef84fc35f3b415629831a099a279124141c8abd9501c4a8336b2592fd0b9008605677c91acfaa2dd9c63ccc7c4fbd8bf14e1b9c7411ff87e7d48120e"
     other_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1OTRocnozcHk2a3Uwdnl5Z3dyM3BycXVhcmQ1eGd3a2E2enkzOWxuOTBtMHNsZ3EzM2ZmeSIsImV4cCI6NjE3MDM2ODkyMDB9.rTPxyNDsiNc9YgHFxpvjAztOJz0VS3RoMLjBqsXPiHE"
-    
+
     other_email = f"{test_identifier}_other@email.com"
     other_user = await User.create(
         type="student",
@@ -485,7 +491,9 @@ async def test_group_leave():
 
     print(response.json())
     assert response.status_code == 200
-    
-    membership = await GroupMembership.filter(group=created_group, user=other_user).first()
+
+    membership = await GroupMembership.filter(
+        Q(group=created_group) & Q(user=other_user)
+    ).first()
     assert membership is not None
     assert membership.rejected == True

@@ -241,6 +241,7 @@ async def user_balance_read(
     ]
 ):
     owed_balance = await balance.get_user_owed_balance(current_membership)
+    escrowed_balance = await balance.get_user_escrowed_balance(current_membership)
     claimed_balance = await balance.get_user_claimed_balance(current_membership)
 
     last_claim_date = (
@@ -253,7 +254,11 @@ async def user_balance_read(
         last_claim_date = last_claim_date.claim_date.isoformat()
 
     return specs.BalanceResponse(
-        owed=owed_balance, claimed=claimed_balance, last_claim_date=last_claim_date
+        owed=owed_balance,
+        available=owed_balance - escrowed_balance,
+        escrowed=escrowed_balance,
+        claimed=claimed_balance,
+        last_claim_date=last_claim_date,
     )
 
 
@@ -865,6 +870,32 @@ async def task_submission_approve(
 
     if task.is_rejected_completed or task.is_approved_completed:
         raise HTTPException(status_code=400, detail="Task is not active anymore")
+
+    if task.is_individual:
+        pass
+    else:
+        rewards = await TaskReward.filter(task=task).all()
+
+        for reward in rewards:
+            await reward.fetch_related("group_member")
+            await reward.group_member.fetch_related("user")
+            await reward.group_member.fetch_related("group")
+            await reward.group_member.group.fetch_related("organization")
+
+            # Find user organization membership
+            user_membership = await OrganizationMembership.filter(
+                Q(user=reward.group_member.user)
+                & Q(organization=reward.group_member.group.organization)
+            ).first()
+            if user_membership is None:
+                raise ValueError(
+                    f"Could not find user membership for group membership {reward.group_member.id}"
+                )
+
+            reward.is_completed = True
+            await reward.save()
+
+            await UserBalance.create(amount=reward.reward, user_member=user_membership)
 
     task.update_from_dict(
         {"is_approved_completed": True, "is_rejected_completed": False}

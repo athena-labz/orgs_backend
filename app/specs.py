@@ -130,5 +130,7 @@ class OrganizationGroupsResponse(ListResponse):
 
 class BalanceResponse(BaseModel):
     owed: int
+    available: int
+    escrowed: int
     claimed: int
     last_claim_date: Optional[datetime.datetime]

@@ -128,102 +128,6 @@ async def test_user_payment_address_add():
     )
 
 
-@freeze_time("2023-12-27 15:00:00")
-async def test_user_owed_amount_claim():
-    test_identifier = "test_user_owed_amount_claim"
-    test_name = " ".join([word.capitalize() for word in test_identifier.split("_")])
-
-    client = TestClient(app)
-
-    assert False
-
-    # Make sure user can't claim if he has no payment address
-
-    stake_address = "stake1ux9rs63rgvsvwzp87r8vlzzz2p78gmdyszjpyfk9fy9sxac2zzrrc"
-    signature = "a40101032720062158209add2f255d6ce14a36501ee2700ba16ae542eddcc85a8e2273aa38ccab6e3eb8H1+DFJCghAmokzYG84582aa201276761646472657373581de18a386a234320c70827f0cecf8842507c746da480a41226c5490b0377a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d3137303336383932303058403b8ce1367d26483d28f9a6b51aff7d32dfb4379df1d3e82a614f5ad5f96292a6e82bf9dfaffbb57eba1a07ca0c890718c81fa9017a69a55ea6ad6cc52203ec07"
-    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eDlyczYzcmd2c3Z3enA4N3I4dmx6enoycDc4Z21keXN6anB5Zms5Znk5c3hhYzJ6enJyYyIsImV4cCI6NjE3MDM2ODkyMDB9.MW3ATMetvoSi2OjybdOMQuiWi4oZWMZ1rwcCJB2o-BE"
-
-    email = f"{test_identifier}@email.com"
-    created_user = await User.create(
-        type="organizer",
-        email=email,
-        stake_address=stake_address,
-        active=True,
-    )
-
-    other_email = f"{test_identifier}_other@email.com"
-    other_stake_address = "stake1ux9lnxds60hdyg7r6p9za5d0k5a8rk72jyelveqqkdre3fc4pqr26"
-    other_user = await User.create(
-        type="organizer",
-        email=other_email,
-        stake_address=other_stake_address,
-        active=True,
-    )
-
-    created_organization = await Organization.create(
-        identifier=f"{test_identifier}_org_1",
-        name=f"{test_name} Org 1",
-        description="",
-        students_password="pass123",
-        teachers_password="pass123",
-        supervisor_password="pass123",
-        areas=[],
-        admin=created_user,
-    )
-
-    created_membership = await OrganizationMembership.create(
-        user=created_user,
-        organization=created_organization,
-        area=None,
-    )
-
-    other_membership = await OrganizationMembership.create(
-        user=other_user,
-        organization=created_organization,
-        area=None,
-    )
-
-    await UserBalance.create(
-        amount=3_000_000,
-        is_claimed=False,
-        user_member=created_membership,
-    )
-
-    await UserBalance.create(
-        amount=7_000_000,
-        is_claimed=True,
-        user_member=created_membership,
-        balance_date=datetime.datetime(2024, 1, 5),
-    )
-
-    await UserBalance.create(
-        amount=1_000_000,
-        is_claimed=True,
-        user_member=created_membership,
-        balance_date=datetime.datetime(2024, 1, 3),
-    )
-
-    await UserBalance.create(
-        amount=6_000_000, is_claimed=False, user_member=other_membership
-    )
-
-    await UserBalance.create(
-        amount=2_000_000, is_claimed=False, user_member=created_membership
-    )
-
-    response = client.get(
-        "/users/me/balance",
-        headers={"Authorization": "Bearer " + token},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "owed": 5_000_000,
-        "claimed": 8_000_000,
-        "last_claim_date": "2024-01-05T00:00:00Z",
-    }
-
-
 @freeze_time("2023-12-28 15:00:00")
 async def test_user_read():
     client = TestClient(app)
@@ -449,6 +353,13 @@ async def test_user_balance_read():
     )
 
     await UserBalance.create(
+        amount=5_000_000,
+        is_claimed=False,
+        is_escrowed=True,
+        user_member=created_membership,
+    )
+
+    await UserBalance.create(
         amount=7_000_000,
         is_claimed=True,
         user_member=created_membership,
@@ -477,7 +388,9 @@ async def test_user_balance_read():
 
     assert response.status_code == 200
     assert response.json() == {
-        "owed": 5_000_000,
+        "owed": 10_000_000,
+        "available": 5_000_000,
+        "escrowed": 5_000_000,
         "claimed": 8_000_000,
         "last_claim_date": "2024-01-05T00:00:00Z",
     }

@@ -13,6 +13,7 @@ from app.model import (
     GroupMembership,
     Task,
     TaskFund,
+    TaskReward,
 )
 
 import datetime
@@ -584,34 +585,6 @@ async def test_task_submission_approve():
         active=True,
     )
 
-    teacher_stake_address = (
-        "stake1uxcdyrvvmdnmpx3mduwgfv2uxanxf0achk8ff3rhpv05u0gnuqfhj"
-    )
-    teacher_signature = "a4010103272006215820e949cb12ef2ceb890f02f594c2e3e0dee5bc361ffe7b91e0cbdc252e949c3ce0H1+DFJCghAmokzYG84582aa201276761646472657373581de1b0d20d8cdb67b09a3b6f1c84b15c376664bfb8bd8e94c4770b1f4e3da166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d3137303336383932303058401c6203a061b350ef7b5a042eb2b678b88197066b31e8d430965e81e84ef7f9c3dfaa9caeaca0ed311bb38e32ca8fbd362601d0ab4760686d3d6ebd7127a35307"
-    teacher_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1eGNkeXJ2dm1kbm1weDNtZHV3Z2Z2MnV4YW54ZjBhY2hrOGZmM3JocHYwNXUwZ251cWZoaiIsImV4cCI6NjE3MDM2ODkyMDB9.AOHMYwpTg662liZK_KEQ7_X4f_fAzSKqskQE4VvBSQI"
-
-    teacher_email = f"{test_identifier}_teacher@email.com"
-    teacher_user = await User.create(
-        type="teacher",
-        email=teacher_email,
-        stake_address=teacher_stake_address,
-        active=True,
-    )
-
-    supervisor_stake_address = (
-        "stake1u93malsg7fpcqpy5qy33w5duhmgc3qud5wxuj0fwcfvmhsgrzersd"
-    )
-    supervisor_signature = "a401010327200621582006ef2abd057204350c3b409a857574a6c7fbf9b4964331abad0915e6341e8ceeH1+DFJCghAmokzYG84582aa201276761646472657373581de163befe08f24380049401231751bcbed188838da38dc93d2ec259bbc1a166686173686564f458403d3d3d3d3d3d4f4e4c59205349474e20494620594f552041524520494e206170702e617468656e616c61626f2e636f6d3d3d3d3d3d3d313730333638393230305840df3bffd8aa82ffe4695fe4a32eaa78e030aec653603e9fd0e51f93214c1a0c4251095c1bec4a5c37e385dde179478cc3ce9f5f4fbaffcc72dfded6d94afd9308"
-    supervisor_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdGFrZTF1OTNtYWxzZzdmcGNxcHk1cXkzM3c1ZHVobWdjM3F1ZDV3eHVqMGZ3Y2Z2bWhzZ3J6ZXJzZCIsImV4cCI6NjE3MDM2ODkyMDB9.Y931dKbzvf5nXx4Fd_SiM-dFBt2XRoUGV4rHYGa2R-s"
-
-    supervisor_email = f"{test_identifier}_supervisor@email.com"
-    supervisor_user = await User.create(
-        type="supervisor",
-        email=supervisor_email,
-        stake_address=supervisor_stake_address,
-        active=True,
-    )
-
     created_organization = await Organization.create(
         identifier=f"{test_identifier}_org_1",
         name=f"{test_name} Org 1",
@@ -623,14 +596,8 @@ async def test_task_submission_approve():
         admin=created_user,
     )
 
-    await OrganizationMembership.create(
+    created_membership = await OrganizationMembership.create(
         user=created_user,
-        organization=created_organization,
-        area=None,
-    )
-
-    await OrganizationMembership.create(
-        user=teacher_user,
         organization=created_organization,
         area=None,
     )
@@ -641,19 +608,13 @@ async def test_task_submission_approve():
         area=None,
     )
 
-    await OrganizationMembership.create(
-        user=supervisor_user,
-        organization=created_organization,
-        area=None,
-    )
-
     created_group = await Group.create(
         identifier=f"{test_identifier}_group_1",
         name=f"{test_name} Group 1",
         organization=created_organization,
     )
 
-    await GroupMembership.create(
+    created_group_membership = await GroupMembership.create(
         group=created_group,
         user=created_user,
         accepted=True,
@@ -670,38 +631,37 @@ async def test_task_submission_approve():
         is_approved_start=True,
     )
 
-    # Should be able to approve as teacher, supervisor or organizer
+    created_reward = await TaskReward.create(
+        reward=10_000_000, group_member=created_group_membership, task=created_task
+    )
 
-    # Organizer
     response = client.post(
         f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_1/submission/approve",
         json={"description": ""},
         headers={"Authorization": "Bearer " + token},
     )
-    print(response.json())
     assert response.status_code == 200
 
-    created_task.update_from_dict({"is_approved_completed": False})
-    await created_task.save()
+    # Make sure there is UserBalance created going to group member
+    funds = await UserBalance.filter(Q(user_member=created_membership)).all()
+    assert len(funds) == 1
 
-    # Teacher
-    response = client.post(
-        f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_1/submission/approve",
-        json={"description": ""},
-        headers={"Authorization": "Bearer " + teacher_token},
-    )
-    assert response.status_code == 200
+    assert funds[0].amount == 10_000_000
+    assert funds[0].is_claimed == False
 
-    created_task.update_from_dict({"is_approved_completed": False})
-    await created_task.save()
+    # Make sure the old reward was marked as completed
+    reward = await TaskReward.filter(
+        Q(group_member=created_group_membership) & Q(task=created_task)
+    ).first()
+    assert reward is not None
 
-    # Supervisor
-    response = client.post(
-        f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_1/submission/approve",
-        json={"description": ""},
-        headers={"Authorization": "Bearer " + supervisor_token},
-    )
-    assert response.status_code == 200
+    assert reward.is_completed == True
+
+    # Make sure task is marked as completed
+    task = await Task.filter(id=created_task.id).first()
+    assert task is not None
+    
+    assert task.is_approved_completed == True
 
     created_task.update_from_dict({"is_approved_completed": False})
     await created_task.save()
@@ -1204,6 +1164,3 @@ async def test_task_fund():
         headers={"Authorization": "Bearer " + token},
     )
     assert response.status_code == 400
-
-
-# Make sure when the submission is approved fund goes where it should
