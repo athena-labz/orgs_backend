@@ -602,7 +602,7 @@ async def test_task_submission_approve():
         area=None,
     )
 
-    await OrganizationMembership.create(
+    other_membership = await OrganizationMembership.create(
         user=student_user,
         organization=created_organization,
         area=None,
@@ -627,12 +627,38 @@ async def test_task_submission_approve():
         name=f"{test_name} Task 1",
         description="",
         deadline=datetime.datetime(2024, 1, 1),
+        is_individual=False,
         group=created_group,
         is_approved_start=True,
     )
 
     created_reward = await TaskReward.create(
         reward=10_000_000, group_member=created_group_membership, task=created_task
+    )
+
+    individual_task = await Task.create(
+        identifier=f"{test_identifier}_task_2",
+        name=f"{test_name} Task 2",
+        description="",
+        deadline=datetime.datetime(2024, 1, 1),
+        is_individual=True,
+        owner_membership=created_membership,
+        is_approved_start=True,
+    )
+
+    created_fund = await TaskFund.create(
+        amount=15_000_000,
+        is_completed=False,
+        user_member=other_membership,
+        task=individual_task,
+    )
+
+    await UserBalance.create(
+        amount=30_000_000,
+        is_claimed=False,
+        is_escrowed=True,
+        escrow_task_fund=created_fund,
+        user_member=other_membership
     )
 
     response = client.post(
@@ -650,9 +676,7 @@ async def test_task_submission_approve():
     assert funds[0].is_claimed == False
 
     # Make sure the old reward was marked as completed
-    reward = await TaskReward.filter(
-        Q(group_member=created_group_membership) & Q(task=created_task)
-    ).first()
+    reward = await TaskReward.filter(id=created_reward.id).first()
     assert reward is not None
 
     assert reward.is_completed == True
@@ -660,7 +684,7 @@ async def test_task_submission_approve():
     # Make sure task is marked as completed
     task = await Task.filter(id=created_task.id).first()
     assert task is not None
-    
+
     assert task.is_approved_completed == True
 
     created_task.update_from_dict({"is_approved_completed": False})
@@ -673,6 +697,33 @@ async def test_task_submission_approve():
         headers={"Authorization": "Bearer " + student_token},
     )
     assert response.status_code == 400
+
+    # Now test individual task
+    response = client.post(
+        f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_2/submission/approve",
+        json={"description": ""},
+        headers={"Authorization": "Bearer " + token},
+    )
+    assert response.status_code == 200
+
+    # Make sure there is UserBalance created going to group member
+    funds = await UserBalance.filter(Q(user_member=created_membership)).all()
+    assert len(funds) == 2
+
+    assert funds[1].amount == 15_000_000
+    assert funds[1].is_claimed == False
+
+    # Make sure the old fund was marked as completed
+    fund = await TaskFund.filter(id=created_fund.id).first()
+    assert fund is not None
+
+    assert fund.is_completed == True
+
+    # Make sure task is marked as completed
+    task = await Task.filter(id=individual_task.id).first()
+    assert task is not None
+
+    assert task.is_approved_completed == True
 
 
 @freeze_time("2023-12-27 15:00:00")

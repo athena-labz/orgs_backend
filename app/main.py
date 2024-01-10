@@ -427,7 +427,7 @@ async def organization_tasks_read(
     organization = await Organization.filter(identifier=organization_identifier).first()
     if organization is None:
         raise HTTPException(status_code=404, detail="Organization not found")
-    
+
     if individual is None and group is None:
         individual = True
         group = True
@@ -911,7 +911,34 @@ async def task_submission_approve(
         raise HTTPException(status_code=400, detail="Task is not active anymore")
 
     if task.is_individual:
-        pass
+        funds = await TaskFund.filter(task=task).all()
+
+        if not task.owner_membership:
+            raise ValueError(f"Task {task.identifier} is individual but has no owner")
+
+        for fund in funds:
+            await fund.fetch_related("user_member")
+            await fund.fetch_related("task")
+
+            # Find user balances escrowed for this fund
+            balances: List["UserBalance"] = await UserBalance.filter(
+                escrow_task_fund=fund
+            ).all()
+            if len(balances) == 0:
+                raise ValueError(f"User fund has no balance escrowed")
+
+            sum_balances = 0
+            for user_balance in balances:
+                sum_balances += user_balance.amount
+
+            change = sum_balances - fund.amount
+
+            await balance.send_amount(
+                fund.user_member, task.owner_membership, balances, change
+            )
+
+            fund.is_completed = True
+            await fund.save()
     else:
         rewards = await TaskReward.filter(task=task).all()
 
@@ -1127,7 +1154,9 @@ async def task_members_read(task: Annotated[Task, Depends(dependecy.get_group_ta
     "/organization/{organization_identifier}/task/{task_identifier}/owner",
     response_model=specs.UserSpec,
 )
-async def task_owner_read(task: Annotated[Task, Depends(dependecy.get_individual_task)]):
+async def task_owner_read(
+    task: Annotated[Task, Depends(dependecy.get_individual_task)]
+):
     await task.fetch_related("owner_membership")
     await task.owner_membership.fetch_related("user")
 

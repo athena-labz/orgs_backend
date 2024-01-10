@@ -63,10 +63,12 @@ async def get_user_claimed_balance(
 
 
 async def collect_amount(
-    user_membership: OrganizationMembership, amount: int
+    user_membership: OrganizationMembership, amount: int, escrowed: bool = False
 ) -> Tuple[List["UserBalance"], int]:
     owed_balances = (
-        await UserBalance.filter(Q(user_member=user_membership) & Q(is_claimed=False))
+        await UserBalance.filter(
+            Q(user_member=user_membership) & Q(is_claimed=False) & Q(is_escrowed=escrowed)
+        )
         .order_by("amount")
         .all()
     )
@@ -83,23 +85,29 @@ async def collect_amount(
     return (collected, total_balance - amount)
 
 
+async def send_amount(
+    sender: OrganizationMembership,
+    receiver: OrganizationMembership,
+    balances: List["UserBalance"],
+    change: int,
+):
+    for balance in balances:
+        balance.is_claimed = True
+        balance.claim_date = datetime.datetime.utcnow()
+
+        await balance.save()
+
+    await UserBalance.create(amount=change, is_claimed=False, user_member=sender)
+    await UserBalance.create(amount=change, is_claimed=False, user_member=receiver)
+
+
 async def make_payment(
     sender_membership: OrganizationMembership,
     receiver_membership: OrganizationMembership,
     amount: int,
 ):
     consumed_balances, change_amount = await collect_amount(sender_membership, amount)
-
-    for balance in consumed_balances:
-        balance.is_claimed = True
-        balance.claim_date = datetime.datetime.utcnow()
-
-        await balance.save()
-
-    await UserBalance.create(
-        amount=change_amount, is_claimed=False, user_member=sender_membership
-    )
-
-    await UserBalance.create(
-        amount=amount, is_claimed=False, user_member=receiver_membership
+    
+    await send_amount(
+        sender_membership, receiver_membership, consumed_balances, change_amount
     )
