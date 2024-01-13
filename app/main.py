@@ -68,7 +68,7 @@ async def user_login_for_access_token(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="User not registered yet",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -920,22 +920,7 @@ async def task_submission_approve(
             await fund.fetch_related("user_member")
             await fund.fetch_related("task")
 
-            # Find user balances escrowed for this fund
-            balances: List["UserBalance"] = await UserBalance.filter(
-                escrow_task_fund=fund
-            ).all()
-            if len(balances) == 0:
-                raise ValueError(f"User fund has no balance escrowed")
-
-            sum_balances = 0
-            for user_balance in balances:
-                sum_balances += user_balance.amount
-
-            change = sum_balances - fund.amount
-
-            await balance.send_amount(
-                fund.user_member, task.owner_membership, balances, change
-            )
+            await balance.fund_release(fund)
 
             fund.is_completed = True
             await fund.save()
@@ -1003,6 +988,27 @@ async def task_submission_reject(
 
     if task.is_rejected_completed or task.is_approved_completed:
         raise HTTPException(status_code=400, detail="Task is not active anymore")
+    
+    if task.is_individual:
+        funds = await TaskFund.filter(task=task).all()
+
+        if not task.owner_membership:
+            raise ValueError(f"Task {task.identifier} is individual but has no owner")
+
+        for fund in funds:
+            await fund.fetch_related("user_member")
+            await fund.fetch_related("task")
+
+            await balance.fund_retreat(fund)
+
+            fund.is_completed = True
+            await fund.save()
+    else:
+        rewards = await TaskReward.filter(task=task).all()
+
+        for reward in rewards:
+            reward.is_completed = True
+            await reward.save()
 
     task.update_from_dict(
         {"is_approved_completed": False, "is_rejected_completed": True}
@@ -1102,14 +1108,7 @@ async def task_fund(
         amount=body.amount, user_member=current_membership, task=task
     )
 
-    collected_balances, _ = await balance.collect_amount(
-        current_membership, body.amount
-    )
-
-    for collected_balance in collected_balances:
-        collected_balance.is_escrowed = True
-        collected_balance.escrow_task_fund = task_fund
-        await collected_balance.save()
+    await balance.fund_escrow(task_fund)
 
     task_action = TaskAction(
         name="Task funded",
