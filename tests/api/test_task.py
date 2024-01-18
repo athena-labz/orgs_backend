@@ -654,11 +654,11 @@ async def test_task_submission_approve():
     )
 
     await UserBalance.create(
-        amount=30_000_000,
+        amount=15_000_000,
         is_claimed=False,
         is_escrowed=True,
         escrow_task_fund=created_fund,
-        user_member=other_membership
+        user_member=other_membership,
     )
 
     response = client.post(
@@ -707,11 +707,18 @@ async def test_task_submission_approve():
     assert response.status_code == 200
 
     # Make sure there is UserBalance created going to group member
-    funds = await UserBalance.filter(Q(user_member=created_membership)).all()
+    funds = (
+        await UserBalance.filter(Q(user_member=created_membership))
+        .order_by("-id")
+        .all()
+    )
     assert len(funds) == 2
 
     assert funds[1].amount == 15_000_000
     assert funds[1].is_claimed == False
+    assert funds[1].is_escrowed == False
+
+    # Make sure user who funded lost his funds
 
     # Make sure the old fund was marked as completed
     fund = await TaskFund.filter(id=created_fund.id).first()
