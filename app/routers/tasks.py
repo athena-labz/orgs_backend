@@ -402,6 +402,13 @@ async def task_fund(
     if task.is_individual == False:
         raise HTTPException(status_code=400, detail="Task must be individual to fund")
 
+    if current_membership.area is not None:
+        if current_membership.area == task.owner_membership.area:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot fund task from student of same school. {current_membership.area}",
+            )
+
     # Make sure user has balance
     user_balance = await balance.get_user_available_balance(current_membership)
     if user_balance < body.amount:

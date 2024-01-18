@@ -1177,9 +1177,29 @@ async def test_task_fund():
     )
     assert response.status_code == 400
 
-    # Finally should be able to fund task in normal circunstances
+    # Should not be able to fund task if users are from the same area
     created_task.update_from_dict({"is_approved_completed": False})
     await created_task.save()
+
+    created_membership.update_from_dict({"area": "Math"})
+    await created_membership.save()
+
+    other_membership.update_from_dict({"area": "Math"})
+    await other_membership.save()
+
+    response = client.post(
+        f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_1/fund",
+        json={"amount": 2_000_000},
+        headers={"Authorization": "Bearer " + token},
+    )
+    assert response.status_code == 400
+
+    # Finally should be able to fund task in normal circunstances
+    created_membership.update_from_dict({"area": None})
+    await created_membership.save()
+
+    created_membership.update_from_dict({"area": None})
+    await created_membership.save()
 
     response = client.post(
         f"/organization/{test_identifier}_org_1/task/{test_identifier}_task_1/fund",
