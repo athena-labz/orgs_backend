@@ -70,7 +70,7 @@ async def test_group_task_create():
     )
 
     response = client.post(
-        f"/organization/{test_identifier}_org_1/group/task/create",
+        f"/organization/{test_identifier}_org_1/task/create/group",
         json={
             "identifier": f"{test_identifier}_task_1",
             "name": f"{test_name} Task 1",

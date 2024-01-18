@@ -52,7 +52,7 @@ async def test_user_login():
     )
 
     register_body = {"username": stake_address, "password": signature}
-    response = client.post("/token", data=register_body)
+    response = client.post("/users/login", data=register_body)
 
     assert response.status_code == 200
     assert response.json() == {
