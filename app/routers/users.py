@@ -236,7 +236,10 @@ async def user_groups_read(
     count: Annotated[int, Query(ge=1, le=20)] = 10,
 ):
     group_memberships = await (
-        GroupMembership.filter(user=organization_membership.user)
+        GroupMembership.filter(
+            Q(user=organization_membership.user)
+            & Q(group__organization=organization_membership.organization)
+        )
         .order_by("-invite_date")
         .offset((page - 1) * count)
         .limit(count)
