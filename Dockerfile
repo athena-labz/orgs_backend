@@ -1,11 +1,14 @@
 FROM python:3.11.5-slim
 
-ARG YOUR_ENV
+# One of: dev, prod
+ARG CURRENT_ENVIRONMENT
+ARG PORT
 
 RUN apt-get update && \
     apt-get install -y curl
 
-ENV YOUR_ENV=${YOUR_ENV} \
+ENV CURRENT_ENVIRONMENT=${CURRENT_ENVIRONMENT} \
+  PORT=${PORT} \
   PYTHONFAULTHANDLER=1 \
   PYTHONUNBUFFERED=1 \
   PYTHONHASHSEED=random \
@@ -25,10 +28,10 @@ WORKDIR /code
 COPY poetry.lock pyproject.toml /code/
 
 # Project initialization:
-RUN poetry install $(test "$YOUR_ENV" == production && echo "--only=main") --no-interaction --no-ansi
+RUN poetry install $(test "$CURRENT_ENVIRONMENT" == prod && echo "--only=main") --no-interaction --no-ansi
 
 COPY . /code
 
 EXPOSE 8080
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT}
