@@ -29,11 +29,11 @@ pytest-asyncio = "^0.23.2"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
-
 [tool.aerich]
 tortoise_orm = "settings.TORTOISE_ORM"
 location = "./migrations"
 src_folder = "./."
+
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.7.1"] # Same as Dockerfile `$POETRY_VERSION`
 build-backend = "poetry.core.masonry.api"
