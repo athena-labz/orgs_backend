@@ -25,7 +25,7 @@ ENV CURRENT_ENVIRONMENT=${CURRENT_ENVIRONMENT} \
 RUN curl -sSL https://install.python-poetry.org | python3 -
 
 WORKDIR /code
-COPY poetry.lock pyproject.toml /code/
+COPY pyproject.toml /code/
 
 # Project initialization:
 RUN poetry install $(test "$CURRENT_ENVIRONMENT" == prod && echo "--only=main") --no-interaction --no-ansi
