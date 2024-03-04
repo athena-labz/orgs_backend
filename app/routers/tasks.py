@@ -182,9 +182,10 @@ async def task_submission(
     task: Annotated[Task, Depends(dependecy.get_task)],
     body: specs.SubmitTaskBodySpec,
 ):
-    # Make sure user is part of task
-    if not await group.is_member_of_specific_group(current_membership, task.group):
-        raise HTTPException(status_code=400, detail="User is not part of this task")
+    if not await auth.has_task_user_privileges(current_membership, task):
+        raise HTTPException(
+            status_code=400, detail="User does not have user permissions for this task"
+        )
 
     if not task.is_approved_start:
         raise HTTPException(
@@ -352,10 +353,9 @@ async def task_submission_review(
     task: Annotated[Task, Depends(dependecy.get_task)],
     body: specs.ReviewTaskBodySpec,
 ):
-    if not auth.has_review_privileges(current_membership.user):
+    if not await auth.has_task_user_privileges(current_membership, task):
         raise HTTPException(
-            status_code=400,
-            detail="User does not have permission to review task submission",
+            status_code=400, detail="User does not have user permissions for this task"
         )
 
     if not task.is_approved_start:

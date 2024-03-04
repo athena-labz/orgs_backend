@@ -1,5 +1,5 @@
-from app.model import User, UserType
-from app.lib import cardano, environment
+from app.model import User, UserType, OrganizationMembership, Task
+from app.lib import cardano, environment, group
 
 from jose import jwt
 import datetime
@@ -37,3 +37,21 @@ def has_review_privileges(user: User):
         UserType.ORGANIZER.value,
         UserType.SUPERVISOR.value,
     ]
+
+
+async def has_task_user_privileges_individual(membership: OrganizationMembership, task: Task):
+    if task.owner_membership is None:
+        return False
+    
+    return task.owner_membership == membership
+
+
+async def has_task_user_privileges_group(membership: OrganizationMembership, task: Task):
+    return await group.is_member_of_specific_group(membership, task.group)
+
+
+async def has_task_user_privileges(membership: OrganizationMembership, task: Task):
+    if task.is_individual:
+        return await has_task_user_privileges_individual(membership, task)
+    else:
+        return await has_task_user_privileges_group(membership, task)
