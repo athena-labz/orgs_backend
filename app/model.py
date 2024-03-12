@@ -53,6 +53,8 @@ class Organization(models.Model):
     teachers_password = fields.CharField(max_length=32)
     supervisor_password = fields.CharField(max_length=32)
 
+    default_credits = fields.BigIntField(default=0)
+
     areas = fields.JSONField()  # should be array of string
 
     admin: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(

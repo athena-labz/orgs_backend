@@ -3,7 +3,14 @@ from typing import Annotated, List
 from tortoise.expressions import Q
 
 from app import dependecy, specs
-from app.model import User, UserType, Organization, OrganizationMembership, Task
+from app.model import (
+    User,
+    UserType,
+    Organization,
+    OrganizationMembership,
+    Task,
+    UserBalance,
+)
 
 
 import logging
@@ -133,11 +140,16 @@ async def organization_join(
             status_code=400, detail="Area selected does not exist in this organization"
         )
 
-    await OrganizationMembership.create(
+    membership = await OrganizationMembership.create(
         user=current_user,
         organization=organization,
         area=None if body.area is None else body.area.lower(),
     )
+
+    if organization.default_credits > 0:
+        await UserBalance.create(
+            amount=organization.default_credits, user_member=membership
+        )
 
     return {"message": f"Successfully joined {organization_identifier}"}
 
